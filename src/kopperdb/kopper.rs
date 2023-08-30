@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Mutex, fs::{File, OpenOptions}, io::Write, os::unix::prelude::FileExt };
 
-pub struct Copper {
+pub struct Kopper {
     state: Mutex<SharedState>,
 }
 
@@ -16,7 +16,7 @@ struct TableEntry {
 }
 
 
-impl Copper {
+impl Kopper {
     pub fn start(path: &str) -> Result<Self, std::io::Error> {
 
         let file = OpenOptions::new()
@@ -26,7 +26,7 @@ impl Copper {
                         .open(path)
                         .expect("Failed to open file");
         
-        Ok(Copper { 
+        Ok(Kopper { 
             state: Mutex::new(SharedState { 
                 table: HashMap::new(), 
                 offset: 0, 

@@ -1,5 +1,9 @@
 # Czkawka
 ## Mimi i Dawi odrdzewieją backendową wiedzę
 
-### cargo run --bin echo
-### cargo run --bin call
+
+### Commands:
+#### cargo run --bin <name>
+#### cargo test
+
+#### KopperDB - miedziany KVS

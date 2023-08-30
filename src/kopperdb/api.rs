@@ -2,7 +2,7 @@ use rocket::State;
 use rocket::serde::json::Json;
 use serde::Serialize;
 
-use crate::copper::Copper;
+use crate::kopper::Kopper;
 
 #[derive(Serialize)]
 pub struct ReadResponse {
@@ -17,7 +17,7 @@ pub struct WriteResponse {
 
 // api
 #[get("/read/<key>")]
-pub fn read(key: String, state: &State<Copper>) -> Json<ReadResponse> {
+pub fn read(key: String, state: &State<Kopper>) -> Json<ReadResponse> {
 
     let mut response = ReadResponse { 
         value: String::from(""), 
@@ -44,7 +44,7 @@ pub fn read(key: String, state: &State<Copper>) -> Json<ReadResponse> {
 }
 
 #[get("/write/<key>/<value>")]
-pub fn write(key: String, value: String, state: &State<Copper>) -> Json<WriteResponse> {
+pub fn write(key: String, value: String, state: &State<Kopper>) -> Json<WriteResponse> {
     
     let result = match state.write(key, value) {
         Ok(_) => "OK".to_string(),
@@ -54,6 +54,6 @@ pub fn write(key: String, value: String, state: &State<Copper>) -> Json<WriteRes
     Json(WriteResponse { error: result.to_string() })
 }
 
-pub fn create_shared_state() -> Result<Copper, std::io::Error> {
-    Copper::start("copper.db")
+pub fn create_shared_state() -> Result<Kopper, std::io::Error> {
+    Kopper::start("kopper.db")
 }

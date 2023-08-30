@@ -20,5 +20,5 @@ name = "echo"
 path = "src/echo/main.rs"
 
 [[bin]]
-name = "copperdb"
-path = "src/copperdb/main.rs"
+name = "kopperdb"
+path = "src/kopperdb/main.rs"
