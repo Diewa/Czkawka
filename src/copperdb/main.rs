@@ -12,7 +12,7 @@ use api::{read, write, create_shared_state};
 fn rocket() -> _ {
     rocket::build()
         .mount("/", routes![read, write])
-        .manage(create_shared_state()) // Shared state accessible by ref in all endpoints. Must be Send + Sync
+        .manage(create_shared_state().expect("Can't create Copper")) // Shared state accessible by ref in all endpoints. Must be Send + Sync
 }
 
 

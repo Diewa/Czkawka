@@ -24,13 +24,19 @@ pub fn read(key: String, state: &State<Copper>) -> Json<ReadResponse> {
         error: String::from("OK") 
     };
 
-    // Copper struct is the 'inner' of state
-    match state.inner().read(key) {
-        Some(value) => {
-            response.value = value
+    match state.read(key) {
+        Ok(value_option) => {
+            match value_option {
+                Some(value) => {
+                    response.value = value
+                },
+                None => {
+                    response.error = "No such thing in database".to_string()
+                }
+            }
         },
-        None => {
-            response.error = "No such thing in database".to_string()
+        Err(err) => {
+            response.error = err.to_string()
         }
     };
 
@@ -40,14 +46,14 @@ pub fn read(key: String, state: &State<Copper>) -> Json<ReadResponse> {
 #[get("/write/<key>/<value>")]
 pub fn write(key: String, value: String, state: &State<Copper>) -> Json<WriteResponse> {
     
-    let result = match state.inner().write(key, value) {
-        Some(_) => "OK",
-        None => "Error writing to database!"
+    let result = match state.write(key, value) {
+        Ok(_) => "OK".to_string(),
+        Err(err) => format!("Error writing to database! ({})", err)
     };
 
     Json(WriteResponse { error: result.to_string() })
 }
 
-pub fn create_shared_state() -> Copper {
+pub fn create_shared_state() -> Result<Copper, std::io::Error> {
     Copper::start("copper.db")
 }
