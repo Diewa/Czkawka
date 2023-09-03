@@ -52,7 +52,7 @@ impl Kopper {
         ))
     }
 
-    pub fn write(&self, key: String, value: String) -> std::io::Result<()> {
+    pub fn write(&self, key: String, value: String) -> std::io::Result<usize> {
         
         let mut state = self.state.lock().unwrap();
 
@@ -75,7 +75,7 @@ impl Kopper {
         state.file.write_all(string_to_save)?;
 
         // Update current offset 
-        state.offset = string_to_save.len();
-        Ok(())
+        state.offset += string_to_save.len();
+        Ok(state.offset)
     }
 }

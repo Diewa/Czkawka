@@ -13,7 +13,8 @@ fn client() -> rocket::local::blocking::Client {
     let client = rocket::local::blocking::Client::untracked(
         rocket::custom(&config)
             .mount("/", routes![read, write])
-            .manage(create_shared_state().expect("Can't create Kopper")) 
+            .manage(create_kopper().expect("Can't create opper")) 
+            .manage(create_stats())
     )
     .expect("Could not build the client");
     client
