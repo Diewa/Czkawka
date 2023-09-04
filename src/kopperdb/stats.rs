@@ -1,27 +1,73 @@
 use plotters::prelude::*;
-use std::{error::Error, sync::Mutex};
+use std::{error::Error, sync::{self, Mutex, mpsc::channel, Arc}};
 
+pub struct StatsAggregator {
+    receiver: sync::mpsc::Receiver<Stat>,
+    counters: Arc<Counters>
+}
+
+pub struct Counters {
+    pub read_counter: Mutex<Vec<u128>>,
+    pub write_counter: Mutex<Vec<u128>>,
+    pub size: Mutex<Vec<u128>>,
+}
+
+impl Counters {
+    pub fn new() -> Self {
+        Counters {
+            read_counter: Mutex::default(),
+            write_counter: Mutex::default(),
+            size: Mutex::default()
+        }
+    }
+}
+
+impl StatsAggregator {
+    pub fn run(&mut self) {
+        loop {
+            match self.receiver.recv().unwrap() {
+                Stat::ReadTime(time) => self.counters.read_counter.lock().unwrap().push(time),
+                Stat::WriteTime(time) => self.counters.write_counter.lock().unwrap().push(time),
+                Stat::Size(size) => self.counters.size.lock().unwrap().push(size),
+            }
+        }
+    }
+}
+
+pub enum Stat {
+    ReadTime(u128),
+    WriteTime(u128),
+    Size(u128)
+}
 
 pub struct Stats {
-    pub read_counter: Mutex<Vec<usize>>,
-    pub write_counter: Mutex<Vec<usize>>,
-    pub size: Mutex<Vec<usize>>
+    sender: sync::mpsc::Sender<Stat>,
+    pub counters: Arc<Counters>,
 }
 
 impl Stats {
-    pub fn new() -> Self {
-        Stats {
-            read_counter: Mutex::new(vec![]),
-            write_counter: Mutex::new(vec![]),
-            size: Mutex::new(vec![])
-        }
+    pub fn create() -> (Stats, StatsAggregator) {
+        let (tx, rx) = channel();
+        let counters = Arc::new(Counters::new());
+        (Stats {
+            sender: tx,
+            counters: counters.clone()
+        },
+        StatsAggregator {
+            receiver: rx,
+            counters
+        })
+    }
+
+    pub fn send(&self, stat: Stat) {
+        self.sender.send(stat).unwrap();
     }
 }
 
 const OUT_FILE_NAME: &'static str = "stats.png";
 const RESOLUTION_QUALITY: usize = 4;
 
-pub fn draw(data: &Vec<usize>, label: &str, unit: &str) -> Result<(), Box<dyn Error>> {
+pub fn draw(data: &Vec<u128>, label: &str, unit: &str) -> Result<(), Box<dyn Error>> {
 
     // Find the biggest datapoint to use as height of graph
     let max = match data.iter().max() {
@@ -46,7 +92,7 @@ pub fn draw(data: &Vec<usize>, label: &str, unit: &str) -> Result<(), Box<dyn Er
         .caption(label, ("sans-serif", 20))
         .build_cartesian_2d(
             (0usize..data.len()).into_segmented(), 
-            0usize..(max + 10).min(100000))?;
+            0u128..(max + 10).min(100000))?;
     
     chart
         .configure_mesh()
@@ -79,10 +125,10 @@ pub fn draw(data: &Vec<usize>, label: &str, unit: &str) -> Result<(), Box<dyn Er
 #[cfg(test)]
 mod test {
 
-    fn get_data(length: usize) -> Vec<usize> {
+    fn get_data(length: usize) -> Vec<u128> {
         let mut ret = vec![];
         for i in 0..length {
-            ret.push((i as f64 * (i as f64).sin()).abs() as usize);
+            ret.push((i as f64 * (i as f64).sin()).abs() as u128);
         }
         ret
     }

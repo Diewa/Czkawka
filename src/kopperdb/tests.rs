@@ -1,4 +1,4 @@
-use std::{sync::Arc, collections::HashMap};
+use std::{sync::{Arc, Mutex}, collections::HashMap, time::Instant};
 
 use super::api::*;
 
@@ -88,4 +88,89 @@ fn mutex_test() {
     println!("Len: {}", arc.lock().unwrap().len());
     println!("Time: {}", start.elapsed().as_millis());
 
+}
+
+fn channel_mpsc_perf(thread_count: usize, mgs_count: usize) {
+
+    use std::sync::mpsc;
+
+    let (tx, rx) = mpsc::channel();
+
+    let time = Instant::now();
+    let mut threads = vec![];
+    for _ in 0..thread_count {
+        let tx_tmp = tx.clone();
+        threads.push(std::thread::spawn(move || {
+            for msg_index in 0..mgs_count {
+                tx_tmp.send(msg_index.to_string()).unwrap();
+            }
+        }));
+    }
+  
+    let recv_thread = std::thread::spawn(move || {
+        let mut received_data = vec![];
+        for _ in 0..thread_count * mgs_count {
+            received_data.push(rx.recv().unwrap());
+        }
+
+        assert_eq!(thread_count * mgs_count, received_data.len());
+    });
+
+    for thread in threads {
+        thread.join().unwrap();
+    }
+
+    println!("Sending time: {}", time.elapsed().as_millis());
+
+    recv_thread.join().unwrap();
+    println!("Total (with receive) time: {}", time.elapsed().as_millis());
+
+}
+
+fn mutex_mpsc_perf(thread_count: usize, mgs_count: usize) {
+    
+    let mutex = Arc::new(Mutex::new(vec![]));
+    
+    let time = Instant::now();
+    let mut threads = vec![];
+    for _ in 0..thread_count {
+        let m = mutex.clone();
+        threads.push(std::thread::spawn(move || {
+            for msg_index in 0..mgs_count {
+                m.lock().unwrap().push(msg_index.to_string());
+            }
+        }));
+    }
+
+    for thread in threads {
+        thread.join().unwrap();
+    }
+
+    assert_eq!(thread_count * mgs_count, mutex.lock().unwrap().len());
+    println!("Total time: {}", time.elapsed().as_millis());
+}
+
+#[test]
+fn channels_vs_mutex() {
+    const THREADS: usize = 10;
+    const MESSAGES: usize = 100000;
+
+    println!("CHANNELS:");
+    channel_mpsc_perf(THREADS, MESSAGES);
+    println!("MUTEX:");
+    mutex_mpsc_perf(THREADS, MESSAGES);
+}
+
+#[test]
+fn sync_of_arc() {
+    let a = Arc::new(1);
+
+    let b = a.clone();
+    std::thread::spawn(move || {
+        println!("{}", b);
+    });
+
+    std::thread::spawn(|| {
+        
+    });
 }
