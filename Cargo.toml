@@ -23,3 +23,7 @@ path = "src/echo/main.rs"
 [[bin]]
 name = "kopperdb"
 path = "src/kopperdb/main.rs"
+
+[[bin]]
+name = "broker"
+path = "src/broker/main.rs"
