@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use rand::{distributions::Alphanumeric, Rng};
 use reqwest::{self, Client};
 
 #[tokio::main]
@@ -10,8 +11,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Send 1000 requests
         if x == 1000 { return None; }
 
+        let (key, value) = random_key_value();
         if x % 2 == 0 {
-            return Some(format!("http://127.0.0.1:8000/write/{}/{}", 1, 1));
+            return Some(format!("http://127.0.0.1:8000/write/{}/{}", key, value));
         }
         else {
             return Some(format!("http://127.0.0.1:8000/read/{}", 1));
@@ -20,6 +22,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }).await?;
     
     Ok(())
+}
+
+fn random_key_value() -> (String, String) {
+    const LEN: usize = 10;
+    let get_random_str = || {
+        rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(LEN)
+            .map(char::from)
+            .collect()
+    };
+    (get_random_str(), get_random_str())
 }
 
 async fn send_until(url: &dyn Fn(usize) -> Option<String>) -> Result<(), Box<dyn std::error::Error>> {

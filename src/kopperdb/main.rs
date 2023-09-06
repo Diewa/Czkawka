@@ -14,7 +14,7 @@ use api::{read, write, get_stats, create_kopper, create_stats};
 fn rocket() -> _ {
     rocket::build()
         .mount("/", routes![read, write, get_stats])
-        .manage(create_kopper().expect("Can't create Kopper")) // Shared state accessible by ref in all endpoints. Must be Send + Sync
+        .manage(create_kopper("kopper.db").expect("Can't create Kopper")) // Shared state accessible by ref in all endpoints. Must be Send + Sync
         .manage(create_stats())
 }
 

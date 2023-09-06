@@ -25,10 +25,15 @@ impl Counters {
 impl StatsAggregator {
     pub fn run(&mut self) {
         loop {
-            match self.receiver.recv().unwrap() {
-                Stat::ReadTime(time) => self.counters.read_counter.lock().unwrap().push(time),
-                Stat::WriteTime(time) => self.counters.write_counter.lock().unwrap().push(time),
-                Stat::Size(size) => self.counters.size.lock().unwrap().push(size),
+            match self.receiver.recv() {
+                Ok(stat) => match stat {
+                    Stat::ReadTime(time) => self.counters.read_counter.lock().unwrap().push(time),
+                    Stat::WriteTime(time) => self.counters.write_counter.lock().unwrap().push(time),
+                    Stat::Size(size) => self.counters.size.lock().unwrap().push(size),
+                }
+
+                // Sender disconnected - stop the thread
+                Err(_) => break
             }
         }
     }
