@@ -89,12 +89,19 @@ pub fn draw(data: &Vec<u128>, label: &str, unit: &str) -> Result<(), Box<dyn Err
     // Background
     root.fill(&WHITE)?;
 
+    // Calculate p50, p95, p99
+    let mut sorted = data.clone();
+    sorted.sort();
+    let p50: u128 = sorted[sorted.len() * 50 / 100] / 1000;
+    let p95 = sorted[sorted.len() * 95 / 100] / 1000;
+    let p99 = sorted[sorted.len() * 99 / 100] / 1000;
+
     // Create chart
     let mut chart = ChartBuilder::on(&root)
         .set_label_area_size(LabelAreaPosition::Left, 40)
         .set_label_area_size(LabelAreaPosition::Bottom, 40)
         .set_label_area_size(LabelAreaPosition::Right, 40)
-        .caption(label, ("sans-serif", 20))
+        .caption(format!("{label}, p50: {p50}{unit}, p95: {p95}{unit}, p99: {p99}{unit}"), ("sans-serif", 20))
         .build_cartesian_2d(
             (0usize..data.len()).into_segmented(), 
             0u128..(max + 10).min(100000))?;
