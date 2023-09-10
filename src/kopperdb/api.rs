@@ -5,7 +5,7 @@ use rocket::serde::json::Json;
 use rocket::fs::NamedFile;
 use serde::Serialize;
 
-use crate::kopper::Kopper;
+use crate::kopper::*;
 use crate::stats::{Stats, self, Stat};
 
 #[derive(Serialize)]
@@ -86,8 +86,8 @@ pub async fn get_stats(read_or_write: String, stats: &State<Stats>) -> Option<Na
     return NamedFile::open(std::path::Path::new("stats.png")).await.ok()
 }
 
-pub fn create_kopper(path: &str) -> Result<Kopper, std::io::Error> {
-    Kopper::start(path)
+pub fn create_kopper(path: &str, segment_size: u64) -> Result<Kopper, KopperError> {
+    Kopper::start(path, segment_size)
 }
 
 pub fn create_stats() -> Stats {
