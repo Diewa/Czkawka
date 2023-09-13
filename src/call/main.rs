@@ -6,14 +6,16 @@ use reqwest::{self, Client};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
+    let kv = vec![0; 100].iter().map(|&x| random_key_value()).collect::<Vec<(String,String)>>();
     send_until(&|x| {
+
+        // Prepare 100 key_values
 
         // Send 1000 requests
         if x == 1000 { return None; }
 
-        let (key, value) = random_key_value();
         if x % 2 == 0 {
-            return Some(format!("http://127.0.0.1:8000/write/{}/{}", key, value));
+            return Some(format!("http://127.0.0.1:8000/write/{}/{}", kv[x % kv.len()].0, kv[x % kv.len()].1));
         }
         else {
             return Some(format!("http://127.0.0.1:8000/read/{}", 1));

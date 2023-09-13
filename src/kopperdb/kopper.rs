@@ -1,19 +1,19 @@
 use core::num;
-use std::{collections::{HashMap, BTreeMap}, sync::Mutex, fs::{File, OpenOptions, self}, io::{Write, Read, self}, os::unix::prelude::FileExt};
+use std::{collections::{HashMap, BTreeMap}, sync::{Mutex, mpsc::channel}, sync::{Arc, mpsc::{Sender, Receiver}}, fs::{File, OpenOptions, self}, io::{Write, Read, self, Seek}, os::unix::prelude::FileExt, fmt::Display, str::FromStr, ops::Add};
 
 pub struct Kopper {
-    state: Mutex<SharedState>,
+    state: Arc<Mutex<SharedState>>,
+    compactor: Sender<()>,
     segment_size: u64,
     path: String
 }
-
-type FileIndex = u64;
 
 struct SharedState {
     table: HashMap<String, TableEntry>,
     files: BTreeMap<FileIndex, File>,
     offset: u64,
     current_file_index: FileIndex,
+    size: u64
 }
 
 struct TableEntry {
@@ -22,22 +22,65 @@ struct TableEntry {
     len: usize
 }
 
+#[derive(PartialEq, Eq, Ord, PartialOrd, Clone, Copy)]
+struct FileIndex {
+    base: u32,
+    index: u32
+}
+
+impl Add<u32> for FileIndex {
+    type Output = Self;
+
+    fn add(mut self, rhs: u32) -> Self::Output {
+        self.index += rhs;
+        self
+    }
+}
+
+impl Display for FileIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}", self.base, self.index)
+    }
+}
+
+impl FromStr for FileIndex {
+    type Err = KopperError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (base, index) = s.split_once('_').ok_or(KopperError::Parse)?;
+        Ok(FileIndex { base: base.parse()?, index: index.parse()? })
+    }
+}
+
 impl Kopper {
     pub fn start(path: &str, segment_size: u64) -> Result<Self, KopperError> {
 
         // Recover
         let shared_state = SharedState::create(path)?;
 
-        Ok(Kopper { 
-            state: Mutex::new(shared_state),
+        // Use channel to communicate with compactor to make sure every compaction request is handled
+        let (compactor_tx, compactor_rx) = channel::<()>();
+
+        let ret = Kopper { 
+            state: Arc::new(Mutex::new(shared_state)),
+            compactor: compactor_tx,
             segment_size,
             path: path.to_owned(),
-        })
+        };
+
+        // Start background thread compacting segments to reclaim memory
+        ret.run_compactor(compactor_rx);
+        Ok(ret)
     }
 
     #[allow(dead_code)]
     pub fn size(&self) -> u64 {
-        self.state.lock().unwrap().offset
+        self.state.lock().unwrap().size
+    }
+
+    #[allow(dead_code)]
+    pub fn path(&self) -> String {
+        self.path.clone()
     }
 
     pub fn read(&self, key: String) -> std::io::Result<Option<String>> {
@@ -51,13 +94,12 @@ impl Kopper {
         let file = 
             state.files
                 .get(&table_entry.file_index).unwrap() // Can't recover from this. Should panic.
-                .try_clone().unwrap(); 
+                .try_clone().unwrap();
 
         // TODO: This is OK because files are never deleted. 
 
         let offset = table_entry.offset;
         let mut buffer = vec![0; table_entry.len];
-        drop(state); // Drop mutex early before reading from file
 
         file.read_exact_at(buffer.as_mut(), offset)?;
 
@@ -77,6 +119,9 @@ impl Kopper {
         // 0. Segment file if next entry would exceed max size
         if (key_len + value_len) as u64 + 2 + state.offset > self.segment_size {
             self.cut_off_segment(&mut state);
+
+            // Ok to unwrap because sender always exists until receiver exists
+            self.compactor.send(()).unwrap(); 
         }
 
         // 1. Save in in-memory map
@@ -85,7 +130,6 @@ impl Kopper {
             offset: state.offset + key.as_bytes().len() as u64 + 1,
             len: value.as_bytes().len()
         };
-
         
         state.table.insert(key.clone(), entry);
 
@@ -98,15 +142,17 @@ impl Kopper {
         let string_to_save = string_to_save.as_bytes();
         state.files.get(&state.current_file_index).unwrap().write_all(string_to_save)?;
 
-        // Update current offset 
+        // Update current offset and total size
         state.offset += string_to_save.len() as u64;
-        Ok(state.offset)
+        state.size += string_to_save.len() as u64;
+
+        Ok(state.size)
     }
 
     fn cut_off_segment(&self, state: &mut std::sync::MutexGuard<'_, SharedState>) {
               
         // Increment index - current_file_index is the biggest of all
-        state.current_file_index += 1;
+        state.current_file_index = FileIndex { base: state.current_file_index.base + 1, index: 0 };
         let new_file_name = self.path.clone() + "/" + &state.current_file_index.to_string();
 
         // Create a new file
@@ -122,12 +168,88 @@ impl Kopper {
         state.files.insert(new_file_index, file);
         state.offset = 0;        
     }
+
+    fn run_compactor(&self, receiver: Receiver<()>) {
+
+        let state = self.state.clone();
+        let path = self.path.clone();
+        std::thread::spawn(move || {
+
+            fn compact(state_mutex: &Mutex<SharedState>, path: String) {
+
+                // Release the lock immidiately after taking a copy of current state
+                let state = state_mutex.lock().unwrap();
+
+                // Safety: there should always be and "older" file because compactor is called after file segment
+                let (file_index, file) = state.files.first_key_value().unwrap();
+                
+                // Make explicit copies
+                let file_index = *file_index;
+                let mut file: File = file.try_clone().unwrap();
+                drop(state);
+                
+                // Load file into memory
+                let mut buffer = Vec::new();
+                file.seek(io::SeekFrom::Start(0)).unwrap();
+                file.read_to_end(&mut buffer).unwrap();
+                
+                let mut new_file_contents = Vec::new();
+                let iter = KeyValueIterator::from(&buffer);
+                
+                // Locked hashmap access here
+                let mut lock = state_mutex.lock().unwrap();
+                for (key, key_value) in iter {
+                    
+                    // If the newest entry exists in the file that's being compacted, 
+                    // change it's file_index and offset to new file
+                    if lock.table.get(key).unwrap().file_index == file_index {
+                        lock.table.insert(key.to_owned(), TableEntry { 
+                            file_index, 
+                            offset: (new_file_contents.len() + key.len() + 1) as u64, 
+                            len: key_value.len() - key.len() - 2
+                        });
+                        new_file_contents.extend_from_slice(key_value);
+                    }
+                }
+
+                // Save compacted file
+                if !new_file_contents.is_empty() {
+                    let compacted_file_index = file_index + 1;
+                    let mut compacted_file =
+                        OpenOptions::new()
+                            .append(true)
+                            .create(true)
+                            .open(path.clone() + "/" + &compacted_file_index.to_string())
+                            .expect("Can't open file in compactor");
+                    
+                    // When all is ready, insert the new file to master tree
+                    compacted_file.write_all(&new_file_contents).unwrap();
+                    lock.files.insert(compacted_file_index, compacted_file);
+                    lock.size += new_file_contents.len() as u64;
+                }
+
+                lock.size -= file.metadata().unwrap().len();
+                lock.files.remove(&file_index);
+                fs::remove_file(path + "/" + &file_index.to_string()).unwrap();
+            }
+
+            loop {
+                match receiver.recv() {
+                    Ok(_) => compact(&*state, path.clone()),
+                    Err(_) => { break; }, // All senders are dropped
+                }
+            }
+            
+            println!("{}", state.lock().unwrap().offset);
+        });
+    }
 }
 
 #[derive(Debug)]
 pub enum KopperError {
     IO(io::Error),
-    Parse(num::ParseIntError)
+    ParseInt(num::ParseIntError),
+    Parse
 }
 
 impl From<io::Error> for KopperError {
@@ -138,7 +260,7 @@ impl From<io::Error> for KopperError {
 
 impl From<num::ParseIntError> for KopperError {
     fn from(err: num::ParseIntError) -> Self {
-        KopperError::Parse(err)
+        KopperError::ParseInt(err)
     }
 }
 
@@ -148,18 +270,19 @@ impl SharedState {
             table: HashMap::new(),
             files: BTreeMap::new(),
             offset: 0,
-            current_file_index: 0,
+            current_file_index: FileIndex { base: 0, index: 0 },
+            size: 0,
         };
 
         // Create dir if doesn't exist yet
-        match fs::create_dir(path) { _ => () };
+        match fs::create_dir_all(path) { _ => () };
 
         // Recover all files
         for dir_entry in fs::read_dir(path).unwrap() {
 
             let dir_entry = dir_entry.unwrap();
 
-            let file = 
+            let mut file = 
                 OpenOptions::new()
                     .read(true)
                     .append(true)
@@ -174,8 +297,8 @@ impl SharedState {
 
             println!("Recovering file: {}", file_index);
 
+            state.size += SharedState::recover_file(&mut state.table, file_index, &mut file);
             state.files.insert(file_index, file);
-            state.recover_file(file_index);
         }
 
         // If starting a new database, create the first file
@@ -187,15 +310,13 @@ impl SharedState {
                 .create(true)
                 .open(head_file)?;
 
-            state.files.insert(0, file);
+            state.files.insert(FileIndex { base: 0, index: 0 }, file);
         }
 
         Ok(state)
     }
 
-    fn recover_file(&mut self, file_index: FileIndex) {
-
-        let mut file = self.files.get(&file_index).unwrap();
+    fn recover_file(table: &mut HashMap<String, TableEntry>, file_index: FileIndex, file: &mut File) -> u64 {
 
         enum CurrentlyReading { Key, Value }
         let mut currently_reading = CurrentlyReading::Key;
@@ -208,7 +329,7 @@ impl SharedState {
         let mut value_file_offset: usize = 0; 
         let mut buffer_file_offset: usize = 0;
         
-        let mut buffer = [0; 5];
+        let mut buffer = [0; 2048];
 
         loop {
             let bytes_in_buffer = match file.read(&mut buffer) {
@@ -239,7 +360,7 @@ impl SharedState {
                             std::mem::swap(&mut tmp_key, &mut key);
                             
                             // Collected all needed parts: key, value's offset and length
-                            self.table.insert(tmp_key, 
+                            table.insert(tmp_key, 
                                 TableEntry {
                                     file_index,
                                     offset: value_file_offset as u64,
@@ -250,7 +371,6 @@ impl SharedState {
                             currently_reading = CurrentlyReading::Key;
                         }
                     }
-
                 }
             }
 
@@ -264,5 +384,49 @@ impl SharedState {
 
             buffer_file_offset += bytes_in_buffer;
         }
+
+        buffer_file_offset as u64
+    }
+}
+
+struct KeyValueIterator<'a> {
+    buf: &'a Vec<u8>,
+    pointer: usize
+}
+
+impl<'a> KeyValueIterator<'a> {
+    fn from(buf: &'a Vec<u8>) -> Self {
+        KeyValueIterator { buf, pointer: 0 }
+    }
+}
+
+impl<'a> Iterator for KeyValueIterator<'a> {
+    type Item = (&'a str,&'a [u8]);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut key = "";
+        let mut value: &[u8] = &[];
+        let mut key_found = false;
+
+        // Find key
+        for byte in self.pointer..self.buf.len() {
+            if self.buf[byte] == b'\0' {
+                if !key_found {
+                    key = std::str::from_utf8(&self.buf[self.pointer..byte]).unwrap();
+                    key_found = true;
+                }
+                else {
+                    value = &self.buf[self.pointer..byte + 1];
+                    self.pointer = byte + 1;
+                    break;
+                }
+            }
+        }
+        
+        if key.is_empty() || value.is_empty() {
+            return None;
+        }
+
+        Some((key, value))
     }
 }
