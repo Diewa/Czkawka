@@ -6,7 +6,7 @@ use reqwest::{self, Client};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
-    let kv = vec![0; 100].iter().map(|&x| random_key_value()).collect::<Vec<(String,String)>>();
+    let kv = vec![0; 100].iter().map(|&_| random_key_value()).collect::<Vec<(String,String)>>();
     send_until(&|x| {
 
         // Prepare 100 key_values
@@ -44,12 +44,14 @@ async fn send_until(url: &dyn Fn(usize) -> Option<String>) -> Result<(), Box<dyn
     for i in 0.. {
         match url(i) {
             Some(url) => {
-                client
+                let response = client
                     .get(url)
                     .send()
-                    .await?
-                    .text()
                     .await?;
+
+                if response.status() != reqwest::StatusCode::OK {
+                    break;
+                }
             },
             None => break
         }
