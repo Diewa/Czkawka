@@ -47,7 +47,7 @@ impl TestClient {
         
         let client = rocket::local::blocking::Client::untracked(
             rocket::custom(&config)
-                .mount("/", routes![read, write])
+                .mount("/", routes![read_kopper, write_kopper])
                 .manage(create_kopper(&path, self.seg_size).expect("Can't create opper")) 
                 .manage(create_stats())
         )
@@ -137,112 +137,9 @@ fn database_does_not_grow_forever() {
         client.get(format!("/write/{}/{}", key, value)).dispatch();
     }
 
-    // Verify that database is much smaller (less than half) than 10 x (key + value + 2)
+    // Verify that database is smaller than 10 x (key + value + 2)
     let all_entries_together_size = 10 * (2 + 2 + 2) / 2;
     let size = client.rocket().state::<Kopper>().unwrap().size();
     
     assert!(size < all_entries_together_size, "{} >= {}", size, all_entries_together_size);
 }
-
-#[test]
-fn file_io_time() {
-    use std::time::Instant;
-
-    let mut file = std::fs::OpenOptions::new()
-        .read(true)
-        .append(true)
-        .create(true)
-        .open("FILE_TEST")
-        .expect("Failed to open file");
-
-    let mut times = Vec::new();
-    for i in 0..1000 {
-        let buffer = vec![i as u8; i*1000];
-        let t = Instant::now();
-        file.write_all(&buffer.as_slice()).unwrap();
-        let t = t.elapsed().as_nanos();
-        times.push(t);
-    }
-
-    super::stats::draw(&times, "files", "ns").unwrap();
-}
-
-#[test]
-fn file_io_time_read() {
-    use std::time::Instant;
-
-    let mut file = std::fs::OpenOptions::new()
-        .read(true)
-        .append(true)
-        .create(true)
-        .open("FILE_TEST")
-        .expect("Failed to open file");
-
-    let mut times = Vec::new();
-    for i in 0..1000 {
-        let mut buffer = vec![i as u8; i*1000];
-        let t = Instant::now();
-        std::io::Read::read(&mut file, &mut buffer).unwrap();
-        let t = t.elapsed().as_nanos();
-        times.push(t);
-    }
-
-    super::stats::draw(&times, "files", "us").unwrap();
-}
-
-
-
-// #[test] 
-// fn seek_test() {
-
-//     let mut files = Vec::new();
-//     for i in 0..10 {
-//         files.push(std::fs::OpenOptions::new()
-//         .read(true)
-//         .append(true)
-//         .create(true)
-//         .open("FILE_TEST".to_owned() + &i.to_string())
-//         .expect("Failed to open file"));
-//     }
-
-//     let time = Instant::now();
-//     let mut threads = Vec::new();
-//     for f in 0..10 {
-//         let tmp = files[f].try_clone().unwrap();
-//         threads.push(std::thread::spawn(move || {
-//             let mut buf = [0; 20];
-//             for i in 0..10000 {
-//                 tmp.read_at(&mut buf, i * 20).unwrap();
-//             }
-//         }));
-//     }
-    
-//     for t in threads {
-//         t.join().unwrap();
-//     }
-//     println!("{}", time.elapsed());
-// }
-
-
-// #[test] 
-// fn seek_test2() {
-//     let mut files = Vec::new();
-//     for i in 0..10 {
-//         files.push(std::fs::OpenOptions::new()
-//             .read(true)
-//             .append(true)
-//             .create(true)
-//             .open("FILE_TEST".to_owned() + &i.to_string())
-//             .expect("Failed to open file"));
-//     }
-
-//     let time = Instant::now();
-//     for i in 0..10000 {
-        
-//         for f in 0..10 {
-//             let mut buf = [0; 20];
-//             files[f].read_at(&mut buf, i * 20).unwrap();
-//         }
-//     }
-//     println!("{}", time.elapsed());
-// }

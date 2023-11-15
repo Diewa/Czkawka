@@ -6,6 +6,7 @@ use rocket::fs::NamedFile;
 use serde::Serialize;
 
 use crate::kopper::*;
+use crate::brass::*;
 use crate::stats::{Stats, self, Stat};
 
 #[derive(Serialize)]
@@ -19,8 +20,12 @@ pub struct WriteResponse {
     error: String
 }
 
-#[get("/read/<key>")]
-pub fn read(key: String, db: &State<Kopper>, stats: &State<Stats>) -> Json<ReadResponse> {
+pub trait Database {
+    fn read(&self, key: String) -> std::io::Result<Option<String>>;
+    fn write(&self, key: String, value: String) -> std::io::Result<u64>;
+}
+
+pub fn read(key: String, db: &impl Database, stats: &State<Stats>) -> Json<ReadResponse> {
     let timer = Instant::now();
     
     let response = match db.read(key.clone()) {
@@ -58,8 +63,7 @@ pub fn read(key: String, db: &State<Kopper>, stats: &State<Stats>) -> Json<ReadR
     Json(response)
 }
 
-#[get("/write/<key>/<value>")]
-pub fn write(key: String, value: String, db: &State<Kopper>, stats: &State<Stats>) -> Json<WriteResponse> {
+pub fn write(key: String, value: String, db: &impl Database, stats: &State<Stats>) -> Json<WriteResponse> {
     let timer = Instant::now();
 
     let response = match db.write(key, value) {
@@ -77,6 +81,26 @@ pub fn write(key: String, value: String, db: &State<Kopper>, stats: &State<Stats
 
     stats.send(Stat::WriteTime(timer.elapsed().as_nanos()));
     Json(response)
+}
+
+#[get("/read/<key>")]
+pub fn read_kopper(key: String, db: &State<Kopper>, stats: &State<Stats>) -> Json<ReadResponse> {
+    read(key, db.inner(), stats)
+}
+
+#[get("/write/<key>/<value>")]
+pub fn write_kopper(key: String, value: String, db: &State<Kopper>, stats: &State<Stats>) -> Json<WriteResponse> {
+    write(key, value, db.inner(), stats)
+}
+
+#[get("/read/b/<key>")]
+pub fn read_brass(key: String, db: &State<Brass>, stats: &State<Stats>) -> Json<ReadResponse> {
+    read(key, db.inner(), stats)
+}
+
+#[get("/write/b/<key>/<value>")]
+pub fn write_brass(key: String, value: String, db: &State<Brass>, stats: &State<Stats>) -> Json<WriteResponse> {
+    write(key, value, db.inner(), stats)
 }
 
 #[get("/stats/<read_or_write>")]
@@ -101,9 +125,36 @@ pub async fn get_stats(read_or_write: String, stats: &State<Stats>) -> Option<Na
     return NamedFile::open(std::path::Path::new("stats.png")).await.ok()
 }
 
+
+// TODO: Move the Database trait to another file and implement it in kopper/brass respectively
+impl Database for Kopper {
+    fn read(&self, key: String) -> std::io::Result<Option<String>> {
+        self.read(key)
+    }
+
+    fn write(&self, key: String, value: String) -> std::io::Result<u64> {
+        self.write(key, value)
+    }
+}
+
+impl Database for Brass {
+    fn read(&self, key: String) -> std::io::Result<Option<String>> {
+        self.read(key)
+    }
+
+    fn write(&self, key: String, value: String) -> std::io::Result<u64> {
+        self.write(key, value)
+    }
+}
+
 /// Creates a [`Kopper`] instance that can be mounted as a state by Rocket 
 pub fn create_kopper(path: &str, segment_size: u64) -> Result<Kopper, KopperError> {
     Kopper::create(path, segment_size)
+}
+
+/// Creates a [`Brass`] instance that can be mounted as a state by Rocket 
+pub fn create_brass(path: &str, segment_size: u64) -> Result<Brass, BrassError> {
+    Brass::create(path, segment_size)
 }
 
 /// Creates a [`Stats`] instance that can be mounted as a state by Rocket,
