@@ -23,24 +23,34 @@ pub struct WriteResponse {
 pub fn read(key: String, db: &State<Kopper>, stats: &State<Stats>) -> Json<ReadResponse> {
     let timer = Instant::now();
     
-    let mut response = ReadResponse { 
-        value: String::from(""), 
-        error: String::from("OK") 
-    };
-    
-    match db.read(key) {
+    let response = match db.read(key.clone()) {
+
+        // Database operation successful
         Ok(value_option) => {
             match value_option {
+
+                // Value exists
                 Some(value) => {
-                    response.value = value
-                },
+                    ReadResponse { 
+                        value, 
+                        error: String::from("OK") 
+                    }
+                }
+
                 None => {
-                    response.error = "No such thing in database".to_string()
+                    ReadResponse { 
+                        value: "".to_string(),
+                        error: format!("{key} does not exist!")
+                    }
                 }
             }
         },
+
         Err(err) => {
-            response.error = err.to_string()
+            ReadResponse { 
+                value: "".to_string(),
+                error: err.to_string()
+            }
         }
     };
     
@@ -52,48 +62,58 @@ pub fn read(key: String, db: &State<Kopper>, stats: &State<Stats>) -> Json<ReadR
 pub fn write(key: String, value: String, db: &State<Kopper>, stats: &State<Stats>) -> Json<WriteResponse> {
     let timer = Instant::now();
 
-    let result = match db.write(key, value) {
+    let response = match db.write(key, value) {
+
+        // Database opration successful = write successful
         Ok(size) => {
             stats.send(Stat::Size(size as u128));
-            "OK".to_string()
+            WriteResponse { error: "OK".to_string() }  
         },
-        Err(err) => format!("Error writing to database! ({})", err)
+
+        Err(err) => {
+            WriteResponse { error: format!("Error while writing! : {}", err) }
+        }
     };
 
     stats.send(Stat::WriteTime(timer.elapsed().as_nanos()));
-    Json(WriteResponse { error: result.to_string() })
+    Json(response)
 }
 
 #[get("/stats/<read_or_write>")]
 pub async fn get_stats(read_or_write: String, stats: &State<Stats>) -> Option<NamedFile> {
     
-    if read_or_write.eq("read") {
-        let read_counter = stats.counters.read_counter.lock().unwrap();
-        stats::draw(&*read_counter, "Reads", "us").expect("Drawing");
-    }
-    else if read_or_write.eq("write") {
-        let write_counter = stats.counters.write_counter.lock().unwrap();
-        stats::draw(&*write_counter, "Writes", "us").expect("Drawing");
-    }
-    else if read_or_write.eq("size") {
-        let size_metric = stats.counters.size.lock().unwrap();
-        stats::draw(&*size_metric, "Size", "KB").expect("Drawing");
-    }
-    else {
-        return None;
+    match read_or_write.as_str() {
+        "read" => {
+            let read_counter = stats.counters.read_counter.lock().unwrap();
+            stats::draw(&*read_counter, "Reads", "us").expect("Drawing");
+        },
+        "write" => {
+            let write_counter = stats.counters.write_counter.lock().unwrap();
+            stats::draw(&*write_counter, "Writes", "us").expect("Drawing");
+        },
+        "size" => {
+            let size_metric = stats.counters.size.lock().unwrap();
+            stats::draw(&*size_metric, "Size", "KB").expect("Drawing");
+        },
+        _ => return None
     }
 
     return NamedFile::open(std::path::Path::new("stats.png")).await.ok()
 }
 
+/// Creates a [`Kopper`] instance that can be mounted as a state by Rocket 
 pub fn create_kopper(path: &str, segment_size: u64) -> Result<Kopper, KopperError> {
-    Kopper::start(path, segment_size)
+    Kopper::create(path, segment_size)
 }
 
+/// Creates a [`Stats`] instance that can be mounted as a state by Rocket,
+/// as well as starting a [`StatsAggregator`] on a separate thread.
+/// 
+/// The aggregator thread lifetime is linked to stats. When Stats are destroyed, 
+/// so is the aggregator.
 pub fn create_stats() -> Stats {
     let (stats, mut aggregator) = Stats::create();
 
-    // This thread exits when last stat Sender is dropped - so when Stats are dropped
     std::thread::spawn(move || {
         aggregator.run();
     });

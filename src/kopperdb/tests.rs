@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use crate::kopper::Kopper;
 
 use super::api::*;
@@ -141,6 +143,53 @@ fn database_does_not_grow_forever() {
     
     assert!(size < all_entries_together_size, "{} >= {}", size, all_entries_together_size);
 }
+
+#[test]
+fn file_io_time() {
+    use std::time::Instant;
+
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .append(true)
+        .create(true)
+        .open("FILE_TEST")
+        .expect("Failed to open file");
+
+    let mut times = Vec::new();
+    for i in 0..1000 {
+        let buffer = vec![i as u8; i*1000];
+        let t = Instant::now();
+        file.write_all(&buffer.as_slice()).unwrap();
+        let t = t.elapsed().as_nanos();
+        times.push(t);
+    }
+
+    super::stats::draw(&times, "files", "ns").unwrap();
+}
+
+#[test]
+fn file_io_time_read() {
+    use std::time::Instant;
+
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .append(true)
+        .create(true)
+        .open("FILE_TEST")
+        .expect("Failed to open file");
+
+    let mut times = Vec::new();
+    for i in 0..1000 {
+        let mut buffer = vec![i as u8; i*1000];
+        let t = Instant::now();
+        std::io::Read::read(&mut file, &mut buffer).unwrap();
+        let t = t.elapsed().as_nanos();
+        times.push(t);
+    }
+
+    super::stats::draw(&times, "files", "us").unwrap();
+}
+
 
 
 // #[test] 

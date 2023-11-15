@@ -58,7 +58,7 @@ impl FromStr for FileIndex {
 }
 
 impl Kopper {
-    pub fn start(path: &str, segment_size: u64) -> Result<Self, KopperError> {
+    pub fn create(path: &str, segment_size: u64) -> Result<Self, KopperError> {
 
         // Recover
         let shared_state = SharedState::create(path)?;
@@ -414,6 +414,23 @@ impl SharedState {
     }
 }
 
+
+/// [`KeyValueIterator`] is an iterator that given a &Vec<u8> of format 
+/// `['k','e','y','\0','v','a','l','u','e','\0']` iterates over key-value pairs.
+/// 
+/// Iterator returns a tuple containing `key` string, ref to slice with `value`, and `offset`
+/// related to the beginning of the vector.  
+/// 
+/// # Example
+/// 
+/// ```
+/// let buffer: Vec<u8> = read_buffer_from_file();
+/// 
+/// for (key, value, offset) in KeyValueIterator::from(&buffer)  {
+///     println!("{}: {}, at {}", key, std::str::from_utf8(value).unwrap(), offset);
+/// }
+/// ```
+/// 
 struct KeyValueIterator<'a> {
     buf: &'a Vec<u8>,
     pointer: usize

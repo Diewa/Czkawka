@@ -104,7 +104,7 @@ pub fn draw(data: &Vec<u128>, label: &str, unit: &str) -> Result<(), Box<dyn Err
         .caption(format!("{label}, p50: {p50}{unit}, p95: {p95}{unit}, p99: {p99}{unit}"), ("sans-serif", 20))
         .build_cartesian_2d(
             (0usize..data.len()).into_segmented(), 
-            0u128..(max + 10).min(100000))?;
+            0u128..(max + 10))?;
     
     chart
         .configure_mesh()
