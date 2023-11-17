@@ -1,5 +1,14 @@
 use core::num;
-use std::{collections::{HashMap, BTreeMap}, sync::{Mutex, mpsc::channel}, sync::{Arc, mpsc::{Sender, Receiver}}, fs::{File, OpenOptions, self}, io::{Write, Read, self, Seek}, os::unix::prelude::FileExt, fmt::Display, str::FromStr, ops::Add};
+use std::{
+    collections::{HashMap, BTreeMap}, 
+    sync::{Mutex, mpsc::channel}, 
+    sync::{Arc, mpsc::{Sender, Receiver}}, 
+    fs::{File, OpenOptions, self}, 
+    io::{Write, Read, self, Seek, SeekFrom},
+    fmt::Display, 
+    str::FromStr, 
+    ops::Add
+};
 
 pub struct Kopper {
     state: Arc<Mutex<SharedState>>,
@@ -96,7 +105,7 @@ impl Kopper {
             None => return Ok(None),
         };
 
-        let file = 
+        let mut file = 
             state.files
                 .get(&table_entry.file_index).unwrap() // Can't recover from this. Should panic.
                 .file.try_clone().unwrap();
@@ -106,7 +115,8 @@ impl Kopper {
         let offset = table_entry.offset;
         let mut buffer = vec![0; table_entry.len];
 
-        file.read_exact_at(buffer.as_mut(), offset)?;
+        file.seek(SeekFrom::Start(offset as u64))?;
+        file.read_exact(&mut buffer)?;
 
         Ok(Some(
             String::from_utf8(buffer)
