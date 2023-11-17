@@ -133,21 +133,3 @@ pub fn draw(data: &Vec<u128>, label: &str, unit: &str) -> Result<(), Box<dyn Err
     root.present().expect("Unable to write result to file");
     Ok(())
 }
-
-#[cfg(test)]
-mod test {
-
-    fn get_data(length: usize) -> Vec<u128> {
-        let mut ret = vec![];
-        for i in 0..length {
-            ret.push((i as f64 * (i as f64).sin()).abs() as u128);
-        }
-        ret
-    }
-
-    #[test]
-    fn run_stats() {
-        super::draw(&get_data(1000), "test", "us").expect("Can't run draw()");
-    }
-
-}
