@@ -24,9 +24,9 @@ impl Storage {
         })
     }
 
-    pub fn create_topic(&mut self, topic_name: String) -> Result<String, Error> {
+    pub fn create_topic(&mut self, topic_name: String) -> Result<String, String> {
         if self.topic_exists(&topic_name) {
-            // return Err("topic already exists");
+            return Err(format!("topic with name: {} already exists", topic_name))
         }
 
         let message_queue = MessageQueue::new();
@@ -35,14 +35,14 @@ impl Storage {
         Ok(topic_name)
     }
 
-    pub fn add_message(&self, topic_name: String, message: Message) -> std::io::Result<i32> {
+    pub fn add_message(&mut self, topic_name: String, message: Message) -> Result<i32, String> {
         if !self.topic_exists(&topic_name) {
-            // Error topic doesn't exist
+            return Err(format!("Topic: {} doesn't exist", topic_name))
         }
 
-        let mut queue = match self.store.get(&topic_name) {
+        let queue = match self.store.get_mut(&topic_name) {
             Some(queue) => queue,
-            None => return Ok(0), // how to return error?
+            None => return Err(format!("cannot find queue for topic: {}", topic_name))
         };
 
         queue.add_message(message);
@@ -50,7 +50,7 @@ impl Storage {
     }
 
     fn topic_exists(&self, topic_name: &String) -> bool {
-        return self.store.contains_key(&topic_name);
+        return self.store.contains_key(topic_name);
     }
 }
 
@@ -67,12 +67,3 @@ impl MessageQueue {
         self.queue.push_back(message);
     }
 }
-
-
-/* Questions to Mimi
-1. Co z konstruktorami dla Struct? Jak inicjalizować zmienne i jakie są wartości domyslne jeśli po prostu wywołam Struct::new()?
-2. Jak stworzyć funkcję która zwraca pusty Result?
-3. Czy do funkcji muszę przekazać self aby móc odwołać się do pól ze struktury? Tak jak to jest w Kopper.rs:38
-4. jak dodać logger do aplikacji?
-5. Jak zwrócić Error z konkretnym message?
- */
