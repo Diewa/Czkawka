@@ -10,7 +10,7 @@ mod tests;
 
 const KOPPERDB_FOLDER: &str = "kopper_database";
 const BRASSDB_FOLDER: &str = "brass_database";
-const SEGMENT_SIZE: u64 = 4096; 
+const SEGMENT_SIZE: usize = 4096; 
 
 use api::{read_kopper, read_brass,
           write_kopper, write_brass,

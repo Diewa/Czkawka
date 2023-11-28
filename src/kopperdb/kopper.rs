@@ -13,21 +13,21 @@ use std::{
 pub struct Kopper {
     state: Arc<Mutex<SharedState>>,
     compactor: Sender<()>,
-    segment_size: u64,
+    segment_size: usize,
     path: String
 }
 
 struct SharedState {
     table: HashMap<String, TableEntry>,
     files: BTreeMap<FileIndex, FileEntry>,
-    offset: u64,
+    offset: usize,
     current_file_index: FileIndex,
-    size: u64
+    size: usize
 }
 
 struct TableEntry {
     file_index: FileIndex,
-    offset: u64,
+    offset: usize,
     len: usize
 }
 
@@ -67,7 +67,7 @@ impl FromStr for FileIndex {
 }
 
 impl Kopper {
-    pub fn create(path: &str, segment_size: u64) -> Result<Self, KopperError> {
+    pub fn create(path: &str, segment_size: usize) -> Result<Self, KopperError> {
 
         // Recover
         let shared_state = SharedState::create(path)?;
@@ -88,7 +88,7 @@ impl Kopper {
     }
 
     #[allow(dead_code)]
-    pub fn size(&self) -> u64 {
+    pub fn size(&self) -> usize {
         self.state.lock().unwrap().size
     }
 
@@ -124,7 +124,7 @@ impl Kopper {
         ))
     }
 
-    pub fn write(&self, key: String, value: String) -> std::io::Result<u64> {
+    pub fn write(&self, key: String, value: String) -> std::io::Result<usize> {
         
         let mut state = self.state.lock().unwrap();
 
@@ -132,7 +132,7 @@ impl Kopper {
         let value_len = value.as_bytes().len();
 
         // 0. Segment file if next entry would exceed max size
-        if (key_len + value_len) as u64 + 2 + state.offset > self.segment_size {
+        if key_len + value_len + 2 + state.offset > self.segment_size {
             self.cut_off_segment(&mut state);
 
             // Ok to unwrap because sender always exists until receiver exists
@@ -142,7 +142,7 @@ impl Kopper {
         // 1. Save in in-memory map
         let entry = TableEntry {
             file_index: state.current_file_index,
-            offset: state.offset + key.as_bytes().len() as u64 + 1,
+            offset: state.offset + key.as_bytes().len() + 1,
             len: value.as_bytes().len()
         };
 
@@ -166,8 +166,8 @@ impl Kopper {
         state.files.get_mut(&file_index).unwrap().file.write_all(string_to_save)?;
 
         // Update current offset and total size
-        state.offset += string_to_save.len() as u64;
-        state.size += string_to_save.len() as u64;
+        state.offset += string_to_save.len();
+        state.size += string_to_save.len();
 
         Ok(state.size)
     }
@@ -236,7 +236,7 @@ impl Kopper {
                     if entry.file_index == file_index && entry.offset == value_offset {
                         lock.table.insert(key.to_owned(), TableEntry { 
                             file_index: compacted_file_index, 
-                            offset: (new_file_contents.len() + key.len() + 1) as u64, 
+                            offset: new_file_contents.len() + key.len() + 1, 
                             len: key_value.len() - key.len() - 2
                         });
                         new_file_contents.extend_from_slice(key_value);
@@ -256,10 +256,10 @@ impl Kopper {
                     
                     // When all is ready, insert the new file to master tree
                     lock.files.insert(compacted_file_index, FileEntry { file: compacted_file, unused_count: 0 });
-                    lock.size += new_file_contents.len() as u64;
+                    lock.size += new_file_contents.len();
                 }
 
-                lock.size -= file.metadata().unwrap().len();
+                lock.size -= file.metadata().unwrap().len() as usize;
                 lock.files.remove(&file_index);
                 fs::remove_file(path + "/" + &file_index.to_string()).unwrap();
                 println!("Removed {}", file_index);
@@ -351,7 +351,7 @@ impl SharedState {
         Ok(state)
     }
 
-    fn recover_file(table: &mut HashMap<String, TableEntry>, file_index: FileIndex, file: &mut File) -> u64 {
+    fn recover_file(table: &mut HashMap<String, TableEntry>, file_index: FileIndex, file: &mut File) -> usize {
 
         enum CurrentlyReading { Key, Value }
         let mut currently_reading = CurrentlyReading::Key;
@@ -398,7 +398,7 @@ impl SharedState {
                             table.insert(tmp_key, 
                                 TableEntry {
                                     file_index,
-                                    offset: value_file_offset as u64,
+                                    offset: value_file_offset,
                                     len: buffer_file_offset + byte_index - value_file_offset,
                                 });
                                 
@@ -420,7 +420,7 @@ impl SharedState {
             buffer_file_offset += bytes_in_buffer;
         }
 
-        buffer_file_offset as u64
+        buffer_file_offset
     }
 }
 
@@ -453,7 +453,7 @@ impl<'a> KeyValueIterator<'a> {
 }
 
 impl<'a> Iterator for KeyValueIterator<'a> {
-    type Item = (&'a str,&'a [u8],u64);
+    type Item = (&'a str,&'a [u8],usize);
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut key = "";
@@ -467,7 +467,7 @@ impl<'a> Iterator for KeyValueIterator<'a> {
                 if !key_found {
                     key = std::str::from_utf8(&self.buf[self.pointer..byte]).unwrap();
                     key_found = true;
-                    offset = (byte + 1) as u64;
+                    offset = byte + 1;
                 }
                 else {
                     value = &self.buf[self.pointer..byte + 1];

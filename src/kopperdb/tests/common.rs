@@ -6,21 +6,26 @@ use rand::{Rng, distributions::Alphanumeric};
 use rocket::Config;
 
 const DB_PATH: &str = "testfiles";
-const SEGMENT_SIZE: u64 = 1024;
+const SEGMENT_SIZE: usize = 1024;
+
+pub enum DBType {
+    Kopper,
+    Brass
+}
 
 pub struct TestClient {
     client: Option<rocket::local::blocking::Client>,
-    seg_size: u64,
+    seg_size: usize,
     test_path: String,
-    folder_prefix: String
+    db: DBType
 }
 
 impl TestClient {
-    pub fn new(folder_prefix: &str) -> Self {
-        TestClient { seg_size: SEGMENT_SIZE, test_path: "".to_owned(), client: None, folder_prefix: folder_prefix.to_owned() }
+    pub fn new(db: DBType) -> Self {
+        TestClient { seg_size: SEGMENT_SIZE, test_path: "".to_owned(), client: None, db }
     }
 
-    pub fn set_seg_size(mut self, seg_size: u64) -> Self { 
+    pub fn set_seg_size(mut self, seg_size: usize) -> Self { 
         self.seg_size = seg_size; self 
     }
 
@@ -32,19 +37,31 @@ impl TestClient {
 
         // Randomize test folder path unless we want to use the same
         if self.test_path.is_empty() {
-            self.test_path = DB_PATH.to_owned() + "/" + &self.folder_prefix + "/" + &random_key_value_with_size(20).0;
+            let db_str = match self.db { DBType::Brass => "brass", DBType::Kopper => "kopper" };
+            self.test_path = DB_PATH.to_owned() + "/" + db_str + "/" + &random_key_value_with_size(20).0;
         }
 
         println!("Creating database {}", self.test_path);
         
-        self.client = Some(rocket::local::blocking::Client::untracked(
-            rocket::custom(&config)
-                .mount("/", routes![read_kopper, write_kopper, read_brass, write_brass])
-                .manage(create_kopper(&self.test_path, self.seg_size).expect("Can't create kopper")) 
-                .manage(create_brass(&self.test_path, self.seg_size).expect("Can't create brass")) 
-                .manage(create_stats())
-        ).expect("Could not build the client"));
+        let mut rocket = rocket::custom(&config);
+        rocket = match self.db {
+            DBType::Kopper => {
+                rocket
+                    .mount("/", routes![read_kopper, write_kopper])
+                    .manage(create_kopper(&self.test_path, self.seg_size).expect("Can't create kopper")) 
+                    .manage(create_stats())
+            },
+            DBType::Brass => {
+                rocket
+                    .mount("/", routes![read_brass, write_brass])
+                    .manage(create_brass(&self.test_path, self.seg_size).expect("Can't create kopper")) 
+                    .manage(create_stats())
+            }
+        };
 
+        self.client = Some(
+            rocket::local::blocking::Client::untracked(rocket).expect("Could not build the client")
+        );
         self
     }
 }

@@ -22,7 +22,7 @@ pub struct WriteResponse {
 
 pub trait Database {
     fn read(&self, key: String) -> std::io::Result<Option<String>>;
-    fn write(&self, key: String, value: String) -> std::io::Result<u64>;
+    fn write(&self, key: String, value: String) -> std::io::Result<usize>;
 }
 
 pub fn read(key: String, db: &impl Database, stats: &State<Stats>) -> Json<ReadResponse> {
@@ -132,7 +132,7 @@ impl Database for Kopper {
         self.read(key)
     }
 
-    fn write(&self, key: String, value: String) -> std::io::Result<u64> {
+    fn write(&self, key: String, value: String) -> std::io::Result<usize> {
         self.write(key, value)
     }
 }
@@ -142,18 +142,18 @@ impl Database for Brass {
         self.read(key)
     }
 
-    fn write(&self, key: String, value: String) -> std::io::Result<u64> {
+    fn write(&self, key: String, value: String) -> std::io::Result<usize> {
         self.write(key, value)
     }
 }
 
 /// Creates a [`Kopper`] instance that can be mounted as a state by Rocket 
-pub fn create_kopper(path: &str, segment_size: u64) -> Result<Kopper, KopperError> {
+pub fn create_kopper(path: &str, segment_size: usize) -> Result<Kopper, KopperError> {
     Kopper::create(path, segment_size)
 }
 
 /// Creates a [`Brass`] instance that can be mounted as a state by Rocket 
-pub fn create_brass(path: &str, segment_size: u64) -> Result<Brass, BrassError> {
+pub fn create_brass(path: &str, segment_size: usize) -> Result<Brass, BrassError> {
     Brass::create(path, segment_size)
 }
 

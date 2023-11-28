@@ -3,7 +3,7 @@ use crate::tests::common::*;
 
 #[test]
 fn test_write_read() {
-    let client = TestClient::new("kopper").build();
+    let client = TestClient::new(DBType::Kopper).build();
 
     // Write
     let (key, value) = random_key_value();
@@ -18,7 +18,7 @@ fn test_write_read() {
 
 #[test]
 fn database_recovers_after_dying() {
-    let client = TestClient::new("kopper").build();
+    let client = TestClient::new(DBType::Kopper).build();
 
     let mut key_values = Vec::new();
     for i in 0..5 {
@@ -39,7 +39,7 @@ fn database_recovers_after_dying() {
 #[test]
 fn recover_all_files_from_folder() {
     // Create small segments
-    let client = TestClient::new("kopper").set_seg_size(100).build();
+    let client = TestClient::new(DBType::Kopper).set_seg_size(100).build();
 
     // Fill first file quickly
     for _ in 0..3 {
@@ -56,7 +56,7 @@ fn recover_all_files_from_folder() {
 
 #[test]
 fn database_does_not_grow_forever() {
-    let client = TestClient::new("kopper").set_seg_size(14).build();
+    let client = TestClient::new(DBType::Kopper).set_seg_size(14).build();
 
     // Send 10 identical requests
     let (key, value) = random_key_value_with_size(2);
