@@ -1,4 +1,4 @@
-1use crate::receiver::storage::MessageStorage;
+use crate::receiver::storage::MessageStorage;
 
 struct Receiver {
     storage: dyn MessageStorage
@@ -12,6 +12,6 @@ impl Receiver {
     }
 
     fn publish_message(&self, payload: String, headers: Vec<String>) {
-        self.storage.save_message // <-- Cannot find declaration
+        self.storage.save_message(payload, headers)
     }
 }
