@@ -1,3 +1,5 @@
+use rocket::fs::{FileServer, relative};
+
 #[macro_use] extern crate rocket;
 
 mod api;
@@ -11,4 +13,10 @@ fn rocket() -> _ {
             api::receiver::publish_message,
             api::receiver::get_offset
         ])
+
+        .mount("/admin", routes![
+            api::admin::create_topic
+        ])
+        
+        .mount("/", FileServer::from(relative!("www")))
 }
