@@ -1,24 +1,72 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 
-pub struct TopicService {
-    topics: HashMap<String, TopicEntry>
+#[derive(Clone)]
+pub struct TopicEntry {
+    pub name: String,
+    pub owner: String
 }
 
-pub struct TopicEntry {
-    name: String,
-    owner: String
+pub struct TopicService {
+
+    // Arc< Mutex< InternalState > > - why?
+    // It's a pattern in rust used to *share mutable access* to data.
+    //
+    // How to share mutable access? In rust:
+    // 1. Variable can be referenced *immutably* multiple times simultaneously - a.k.a. "shared" reference
+    // 2. Variable can be referenced *mutably* only once - a.k.a "exclusive" reference
+    // so sharing a mutable reference should not be possibe. Right?
+    // 
+    // To safely allow it there exists a concept of *Interior Mutability*. 
+    // Basically there are some structs that allow mutating variable via shared reference, which means
+    // you don't need to pass it as "mut", but you can still use methods that modify internal state
+    // (methods that behave like taking "&mut self" as argument).
+    //
+    // There are 3: Cell, RefCell, and ... Mutex!
+    //
+    // Why Mutex? Because when accessing state guarded by a Mutex the caller is guaranteed to be the only
+    // one accessing the data, so restrictions provided by borrow checker (checking that mut == exclusive) 
+    // are not needed anymore.
+    //
+    // Ok, so we have Mutex to do modifications, but why Arc< .. > ?
+    // Arc stands for "Atomically Reference Counted" - it's a concept from C++ known as "shared pointer". 
+    // 
+    // Arc is a struct that acts as a reference to the object, but with a benefit of destroying the object
+    // when there is nothing referencing it (no copy of Arc exists anymore). It's object's personal garbage collector. 
+    //
+    // Arc is used to reference data shared between threads. It doesn't provide safe access (that's what Mutex if for),
+    // but ensures that object is deallocated when (and not before) the last thread knowing about it finishes.
+
+    topics: Arc<Mutex< HashMap<String, TopicEntry>> >
 }
 
 impl TopicService {
     pub fn new() -> Self {
-        TopicService{}
+        let ts = TopicService{ topics: Arc::default() };
+
+        // Mock some topics
+        let name = String::from("Dobry Topic");
+        ts.create_topic(name.clone(), TopicEntry { name, owner: String::from("Dawid") });
+        let name = String::from("Średni Topic");
+        ts.create_topic(name.clone(), TopicEntry { name, owner: String::from("Michal") });
+        let name = String::from("Chujowy Topic");
+        ts.create_topic(name.clone(), TopicEntry { name, owner: String::from("Szatan") });
+        
+        ts
     }
 
-    pub fn create_topic(&mut self, name: String, topic: TopicEntry) {
-        self.topics.insert(name, topic);
+    pub fn create_topic(&self, name: String, topic: TopicEntry) {
+        self.topics
+            .lock() // Lock the Mutex, the result is Result<HashMap, Error>
+            .expect("Can't lock create_topic") // Expect on the Result
+            .insert(name, topic); // Insert to the HashMap
     }
 
     pub fn get_topics(&self) -> Vec<TopicEntry> {
-        self.topics.values().cloned().collect::<Vec<TopicEntry>>()
+        self.topics
+            .lock()
+            .expect("Can't lock get_topics")
+            .values()
+            .cloned()
+            .collect::<Vec<TopicEntry>>()
     }
 }

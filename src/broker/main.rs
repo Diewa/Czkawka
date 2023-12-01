@@ -1,5 +1,5 @@
 use rocket::fs::{FileServer, relative};
-use crate::topic::TopicService;
+use crate::topic::topic_service::TopicService;
 
 #[macro_use] extern crate rocket;
 
