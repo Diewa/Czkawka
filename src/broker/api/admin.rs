@@ -1,11 +1,13 @@
+#![allow(renamed_and_removed_lints)]
+
 use rocket::State;
 
-use serde::Deserialize;
-use rocket::serde::json::Json;
+use rocket::response::content;
+use rocket::form::{Form, FromForm};
 
 use crate::topic::topic_service::{TopicService, TopicEntry};
 
-#[derive(Deserialize)]
+#[derive(FromForm)]
 pub struct TopicDTO {
     name: String,
     owner: String
@@ -13,49 +15,54 @@ pub struct TopicDTO {
 
 #[post("/topics", data = "<new_topic>")]
 pub fn create_topic(
-    new_topic: Json<TopicDTO>, 
+    new_topic: Form<TopicDTO>,
     topic_service: &State<TopicService>
-) -> &'static str {
+) -> content::RawHtml<String> {
 
+    // TODO: Add validation
     let topic_entry = TopicEntry {
-        name: new_topic.0.name.clone(),
-        owner: new_topic.0.owner
+        name: new_topic.name.clone(),
+        owner: new_topic.owner.clone()
     };
 
-    topic_service.create_topic(new_topic.0.name, topic_entry);
+    // TODO: Good place to experiment with errors
+    if topic_service.create_topic(topic_entry.clone()) {
+        return content::RawHtml(topic_entry.to_html_row());
+    }
 
-    "OK!"
+    content::RawHtml(String::new())
 }
 
 #[get("/topics")]
-pub fn get_topics(topic_service: &State<TopicService>) -> String {
-    
-    /*  
-        <tr>
-            <th scope="row">1</th> 
-            <td>Mark</td>
-            <td>Otto</td>
-        </tr>
-        <tr>
-            <th scope="row">2</th>
-            <td>Jacob</td>
-            <td>Thornton</td>
-        </tr>
-        ...
-    */
+pub fn get_topics(topic_service: &State<TopicService>) -> content::RawHtml<String> {
 
-    let mut ret = String::new();
+    let mut html = String::new();
 
-    for (index, topic) in topic_service.get_topics().iter().enumerate() {
-        ret.push_str("<tr>");
-        ret.push_str("<th scope=\"row\">");
-        ret.push_str(&index.to_string());
-        ret.push_str("</th><td>");
-        ret.push_str(&topic.name);
-        ret.push_str("</td><td>");
-        ret.push_str(&topic.owner);
-        ret.push_str("</td></tr>");
+    for topic_entry in topic_service.get_topics() {
+        html.push_str(&topic_entry.to_html_row());
     }
     
-    ret
+    content::RawHtml(html)
+}
+
+trait ToHtmlRow {
+    fn to_html_row(&self) -> String;
+}
+
+impl ToHtmlRow for TopicEntry {
+/*
+    <tr>
+        <td>Tomek-the-topic</td>
+        <td>Stary Tomka</td>
+    </tr>
+*/
+    fn to_html_row(&self) -> String {
+        let mut html = String::new();
+        html.push_str("<tr><td>");
+        html.push_str(&self.name);
+        html.push_str("</td><td>");
+        html.push_str(&self.owner);
+        html.push_str("</td></tr>");
+        html
+    }
 }

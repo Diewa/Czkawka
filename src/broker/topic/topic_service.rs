@@ -44,21 +44,24 @@ impl TopicService {
         let ts = TopicService{ topics: Arc::default() };
 
         // Mock some topics
-        let name = String::from("Dobry Topic");
-        ts.create_topic(name.clone(), TopicEntry { name, owner: String::from("Dawid") });
-        let name = String::from("Średni Topic");
-        ts.create_topic(name.clone(), TopicEntry { name, owner: String::from("Michal") });
-        let name = String::from("Chujowy Topic");
-        ts.create_topic(name.clone(), TopicEntry { name, owner: String::from("Szatan") });
-        
+        ts.create_topic(TopicEntry { name: String::from("Dobry Topic"), owner: String::from("Dawid") });
+        ts.create_topic(TopicEntry { name: String::from("Chujowy Topic"), owner: String::from("Szatan") });
+        ts.create_topic(TopicEntry { name: String::from("Średni Topic"), owner: String::from("Michal") });
         ts
     }
 
-    pub fn create_topic(&self, name: String, topic: TopicEntry) {
-        self.topics
-            .lock() // Lock the Mutex, the result is Result<HashMap, Error>
-            .expect("Can't lock create_topic") // Expect on the Result
-            .insert(name, topic); // Insert to the HashMap
+    pub fn create_topic(&self, topic: TopicEntry) -> bool {
+        let mut locked_map = self.topics
+            .lock() // Lock the Mutex, returns Result<HashMap, Error>
+            .expect("Can't lock create_topic"); // Expect on the Result
+
+        // We don't want to override existing keys
+        if locked_map.contains_key(&topic.name) {
+            return false;
+        }
+
+        locked_map.insert(topic.name.clone(), topic);
+        true
     }
 
     pub fn get_topics(&self) -> Vec<TopicEntry> {
