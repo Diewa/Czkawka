@@ -28,3 +28,6 @@ path = "src/kopperdb/main.rs"
 [[bin]]
 name = "broker"
 path = "src/broker/main.rs"
+
+[lib]
+path = "src/lib/lib.rs"

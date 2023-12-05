@@ -5,9 +5,9 @@ use rocket::serde::json::Json;
 use rocket::fs::NamedFile;
 use serde::Serialize;
 
-use crate::kopper::*;
-use crate::brass::*;
-use crate::stats::{Stats, self, Stat};
+use czkawka::kopper::*;
+use czkawka::brass::*;
+use czkawka::stats::{Stats, self, Stat};
 
 #[derive(Serialize)]
 pub struct ReadResponse {
@@ -158,7 +158,7 @@ pub fn create_brass(path: &str, segment_size: usize) -> Result<Brass, BrassError
 }
 
 /// Creates a [`Stats`] instance that can be mounted as a state by Rocket,
-/// as well as starting a [`StatsAggregator`] on a separate thread.
+/// as well as starting a [`stats::StatsAggregator`] on a separate thread.
 /// 
 /// The aggregator thread lifetime is linked to stats. When Stats are destroyed, 
 /// so is the aggregator.

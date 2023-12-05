@@ -1,9 +1,8 @@
+use rand::{Rng, distributions::Alphanumeric};
 use std::ops::Deref;
+use rocket::Config;
 
 use crate::api::*;
-
-use rand::{Rng, distributions::Alphanumeric};
-use rocket::Config;
 
 const DB_PATH: &str = "testfiles";
 const SEGMENT_SIZE: usize = 1024;
@@ -44,6 +43,7 @@ impl TestClient {
         println!("Creating database {}", self.test_path);
         
         let mut rocket = rocket::custom(&config);
+            
         rocket = match self.db {
             DBType::Kopper => {
                 rocket

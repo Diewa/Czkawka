@@ -424,30 +424,28 @@ impl SharedState {
     }
 }
 
-
 /// [`KeyValueIterator`] is an iterator that given a &Vec<u8> of format 
 /// `['k','e','y','\0','v','a','l','u','e','\0']` iterates over key-value pairs.
 /// 
 /// Iterator returns a tuple containing `key` string, ref to slice with `value`, and `offset`
 /// related to the beginning of the vector.  
 /// 
-/// # Example
-/// 
 /// ```
-/// let buffer: Vec<u8> = read_buffer_from_file();
+/// use czkawka::kopper::KeyValueIterator;
+///
+/// let buffer: &[u8] = b"AB\0CD\0EF\0GH\0";
 /// 
-/// for (key, value, offset) in KeyValueIterator::from(&buffer)  {
+/// for (key, value, offset) in KeyValueIterator::from(buffer)  {
 ///     println!("{}: {}, at {}", key, std::str::from_utf8(value).unwrap(), offset);
 /// }
 /// ```
-/// 
-struct KeyValueIterator<'a> {
-    buf: &'a Vec<u8>,
+pub struct KeyValueIterator<'a> {
+    buf: &'a [u8],
     pointer: usize
 }
 
 impl<'a> KeyValueIterator<'a> {
-    fn from(buf: &'a Vec<u8>) -> Self {
+    pub fn from(buf: &'a [u8]) -> Self {
         KeyValueIterator { buf, pointer: 0 }
     }
 }

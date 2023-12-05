@@ -1,4 +1,4 @@
-use crate::kopper::Kopper;
+use czkawka::kopper::Kopper;
 use crate::tests::common::*;
 
 #[test]

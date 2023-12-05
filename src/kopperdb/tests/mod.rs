@@ -1,3 +1,3 @@
-mod kopper_tests;
-mod brass_tests;
 mod common;
+mod brass_tests;
+mod kopper_tests;
