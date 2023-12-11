@@ -33,6 +33,12 @@ pub fn create_topic(
     content::RawHtml(String::new())
 }
 
+// #[post("/topics2", data)]
+// pub fn create_topic2() -> content::RawHtml<String> {
+//     // TODO: Add validation
+//     content::RawHtml(String::new())
+// }
+
 #[get("/topics")]
 pub fn get_topics(topic_service: &State<TopicService>) -> content::RawHtml<String> {
 

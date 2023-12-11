@@ -7,6 +7,9 @@ mod api;
 mod storage;
 mod topic;
 
+#[cfg(test)]
+mod tests;
+
 #[launch]
 fn rocket() -> _ {
     rocket::build()
@@ -24,6 +27,6 @@ fn rocket() -> _ {
             api::admin::create_topic
         ])
         .manage(TopicService::new())
-        
+
         .mount("/", FileServer::from(relative!("src/broker/web")))
 }

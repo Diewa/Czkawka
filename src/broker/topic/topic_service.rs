@@ -36,7 +36,7 @@ pub struct TopicService {
     // Arc is used to reference data shared between threads. It doesn't provide safe access (that's what Mutex if for),
     // but ensures that object is deallocated when (and not before) the last thread knowing about it finishes.
 
-    topics: Arc<Mutex< HashMap<String, TopicEntry>> >
+    topics: Arc< Mutex< HashMap<String, TopicEntry> > >
 }
 
 impl TopicService {
@@ -52,7 +52,7 @@ impl TopicService {
 
     pub fn create_topic(&self, topic: TopicEntry) -> bool {
         let mut locked_map = self.topics
-            .lock() // Lock the Mutex, returns Result<HashMap, Error>
+            .lock() // Lock the Mutex, returns Result<HashMap, Error> - Result<T,Error> ? 
             .expect("Can't lock create_topic"); // Expect on the Result
 
         // We don't want to override existing keys
@@ -72,4 +72,54 @@ impl TopicService {
             .cloned()
             .collect::<Vec<TopicEntry>>()
     }
+
+    // todo: create fn topic_exists(topic: String)
+}
+
+
+// struct InnerArc<T>
+// {
+//     reference_counter: Mutex<u64>,
+//     obj: T
+// }
+
+// struct Arc<T> {
+//     inner: const * InnerArc<T>
+// }
+
+// impl Arc<T> {
+//     new()
+//     {
+//         inner.reference_counter.lock() += 1;
+//         return inner.obj;
+//     }
+
+//     ~destuctor()
+//     {
+//         if inner.reference_counter.lock() == 0
+//         {
+//             delete inner;
+//         }
+//         else 
+//         {
+//             inner.reference_counter.lock() -= 1;
+//         }
+//     }
+// }
+
+#[test]
+fn test()
+{
+    let v: Vec<i32> = vec![1,2,3,4];
+
+    let arc1 = Arc::new(v);
+
+    let arc2 = arc1.clone();
+    std::thread::spawn(move || {
+        println!("{:?}", arc2);
+    });
+
+    std::thread::spawn(move || {
+        println!("{:?}", arc1);
+    });
 }
