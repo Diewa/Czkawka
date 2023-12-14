@@ -73,7 +73,11 @@ impl TopicService {
             .collect::<Vec<TopicEntry>>()
     }
 
-    // todo: create fn topic_exists(topic: String)
+    pub fn topic_exists(&self, topic_name: &String) -> bool {
+        return self.topics.lock()
+            .expect("Can't lock on topic_exists")
+            .contains_key(topic_name);
+    }
 }
 
 

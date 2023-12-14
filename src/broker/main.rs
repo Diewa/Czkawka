@@ -1,4 +1,5 @@
 use rocket::fs::{FileServer, relative};
+use crate::topic::publisher_service::PublisherService;
 use crate::topic::topic_service::TopicService;
 
 #[macro_use] extern crate rocket;
@@ -12,6 +13,7 @@ mod tests;
 
 #[launch]
 fn rocket() -> _ {
+    let topic_service = TopicService::new();
     rocket::build()
         .configure(rocket::Config::figment().merge(("port", 8081)))
 
@@ -26,7 +28,8 @@ fn rocket() -> _ {
             api::admin::get_topics,
             api::admin::create_topic
         ])
-        .manage(TopicService::new())
+        .manage(topic_service)
+        .manage(PublisherService::new(&topic_service))
 
         .mount("/", FileServer::from(relative!("src/broker/web")))
 }
