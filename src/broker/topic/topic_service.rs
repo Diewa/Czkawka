@@ -1,6 +1,10 @@
 use std::{collections::HashMap, sync::{Arc, Mutex}};
 
-use czkawka::kopper::Kopper;
+use czkawka::kopper::*;
+use serde::{Serialize, Deserialize};
+use rocket::serde::json::serde_json;
+
+const TOPICS_KEY: &str = "topics";
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TopicEntry {
@@ -38,7 +42,9 @@ pub struct TopicService {
     // Arc is used to reference data shared between threads. It doesn't provide safe access (that's what Mutex if for),
     // but ensures that object is deallocated when (and not before) the last thread knowing about it finishes.
 
-    topics: Arc< Mutex< HashMap<String, TopicEntry> > >,
+    topics: Arc<Mutex< HashMap<String, TopicEntry> >>,
+
+    // Database. KopperDB already has all the synchronizations mechanisms
     db: Kopper
 }
 
@@ -55,35 +61,36 @@ impl TopicService {
 
     pub fn create_topic(&self, topic: TopicEntry) -> bool {
 
-        match self.db.read(topic.name) { // consider prefix
-            Ok(option) => {
-                match option {
-                    Some(value) => {
-                        return false;
+        // 1. Add a topic to the database
+        self.db.write(&topic.name, &serde_json::to_string(&topic).expect("Failed to serialize"))
+            .unwrap();
+
+        // 2. Add the topic name (key) to list of topics
+        match self.db.read(TOPICS_KEY) {
+            Ok(value) => {
+                match value {
+                    Some(topic_list) => {
+                        // Topic list exists! Deserialize it
+                        let mut list: Vec<String> = serde_json::from_str(&topic_list).expect("Can't deserialize topic list");
+                        
+                        // Append to it
+                        list.push(topic.name);
+
+                        // And write it back
+                        self.db.write(TOPICS_KEY, &serde_json::to_string(&list).expect("Failed to serialize")).unwrap();
                     },
-                    None => ()
+
+                    // Topics list does not exist yet, let's add it
+                    None => {
+                        self.db.write(TOPICS_KEY, &serde_json::to_string(&vec![topic.name]).expect("Failed to serialize")).unwrap();
+                    },
                 }
-            }
-            Err(e) => todo!()
+                return true;
+            },
+            Err(error) => {
+                return false;
+            },
         }
-        // let mut locked_map = self.topics
-        //     .lock() // Lock the Mutex, returns Result<HashMap, Error> - Result<T,Error> ? 
-        //     .expect("Can't lock create_topic"); // Expect on the Result
-        
-        // // We don't want to override existing keys
-        // if locked_map.contains_key(&topic.name) {
-        //     return false;
-        // }
-
-        // TU MUSIMY ZROBIC SERIALIZE TopicEntry
-        match self.db.write(topic.name, topic.to_string()) {
-            Ok(res) => return true,
-            Err(err) => todo!()
-        }
-
-        // locked_map.insert(topic.name.clone(), topic);
-
-        true
     }
 
     pub fn get_topics(&self) -> Vec<TopicEntry> {

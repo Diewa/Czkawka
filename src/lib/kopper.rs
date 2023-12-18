@@ -10,6 +10,7 @@ use std::{
     ops::Add
 };
 
+#[derive(Clone)]
 pub struct Kopper {
     state: Arc<Mutex<SharedState>>,
     compactor: Sender<()>,
@@ -97,10 +98,10 @@ impl Kopper {
         self.path.clone()
     }
 
-    pub fn read(&self, key: String) -> std::io::Result<Option<String>> {
+    pub fn read(&self, key: &str) -> std::io::Result<Option<String>> {
         let state = self.state.lock().unwrap();
 
-        let table_entry = match state.table.get(&key) {
+        let table_entry = match state.table.get(key) {
             Some(table_entry) => table_entry,
             None => return Ok(None),
         };
@@ -124,7 +125,7 @@ impl Kopper {
         ))
     }
 
-    pub fn write(&self, key: String, value: String) -> std::io::Result<usize> {
+    pub fn write(&self, key: &str, value: &str) -> std::io::Result<usize> {
         
         let mut state = self.state.lock().unwrap();
 
@@ -146,7 +147,7 @@ impl Kopper {
             len: value.as_bytes().len()
         };
 
-        let result = state.table.insert(key.clone(), entry);
+        let result = state.table.insert(key.to_string(), entry);
         match result {
             Some(entry) => {
                 println!("{}", &entry.file_index);
@@ -156,7 +157,7 @@ impl Kopper {
         }
 
         // 2. Write to disk
-        let mut string_to_save = key;
+        let mut string_to_save = key.to_string();
         string_to_save.push('\0');
         string_to_save.push_str(&value);
         string_to_save.push('\0');

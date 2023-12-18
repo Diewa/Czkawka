@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
+#[macro_use] extern crate rocket;
 use rocket::fs::{FileServer, relative};
+
 use crate::topic::publisher_service::PublisherService;
 use crate::topic::topic_service::TopicService;
+use czkawka::kopper::Kopper;
 
-#[macro_use] extern crate rocket;
-
+// Mods
 mod api;
 mod storage;
 mod topic;
@@ -13,12 +15,16 @@ mod topic;
 #[cfg(test)]
 mod tests;
 
+const KOPPERDB_FOLDER: &str = "kopper_database";
+const SEGMENT_SIZE: usize = 4000; 
+
 #[launch]
 fn rocket() -> _ {
 
     // DI management
-    let topic_service = Arc::new(TopicService::new());
-    let publisher_service = PublisherService::new(topic_service.clone());
+    let kopper = Kopper::create(KOPPERDB_FOLDER, SEGMENT_SIZE).expect("Can't create Kopper!");
+    let topic_service = Arc::new(TopicService::new(kopper.clone()));
+    let publisher_service = PublisherService::new(topic_service.clone(), kopper);
 
     rocket::build()
         .configure(rocket::Config::figment().merge(("port", 8081)))
@@ -34,8 +40,8 @@ fn rocket() -> _ {
             api::admin::get_topics,
             api::admin::create_topic
         ])
-        //.manage(di_manager)
         .manage(topic_service)
+        .manage(publisher_service)
 
         .mount("/", FileServer::from(relative!("src/broker/web")))
 }

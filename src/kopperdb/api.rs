@@ -21,14 +21,14 @@ pub struct WriteResponse {
 }
 
 pub trait Database {
-    fn read(&self, key: String) -> std::io::Result<Option<String>>;
-    fn write(&self, key: String, value: String) -> std::io::Result<usize>;
+    fn read(&self, key: &str) -> std::io::Result<Option<String>>;
+    fn write(&self, key: &str, value: &str) -> std::io::Result<usize>;
 }
 
-pub fn read(key: String, db: &impl Database, stats: &State<Stats>) -> Json<ReadResponse> {
+pub fn read(key: &str, db: &impl Database, stats: &State<Stats>) -> Json<ReadResponse> {
     let timer = Instant::now();
     
-    let response = match db.read(key.clone()) {
+    let response = match db.read(key) {
 
         // Database operation successful
         Ok(value_option) => {
@@ -63,7 +63,7 @@ pub fn read(key: String, db: &impl Database, stats: &State<Stats>) -> Json<ReadR
     Json(response)
 }
 
-pub fn write(key: String, value: String, db: &impl Database, stats: &State<Stats>) -> Json<WriteResponse> {
+pub fn write(key: &str, value: &str, db: &impl Database, stats: &State<Stats>) -> Json<WriteResponse> {
     let timer = Instant::now();
 
     let response = match db.write(key, value) {
@@ -84,22 +84,22 @@ pub fn write(key: String, value: String, db: &impl Database, stats: &State<Stats
 }
 
 #[get("/read/<key>")]
-pub fn read_kopper(key: String, db: &State<Kopper>, stats: &State<Stats>) -> Json<ReadResponse> {
+pub fn read_kopper(key: &str, db: &State<Kopper>, stats: &State<Stats>) -> Json<ReadResponse> {
     read(key, db.inner(), stats)
 }
 
 #[get("/write/<key>/<value>")]
-pub fn write_kopper(key: String, value: String, db: &State<Kopper>, stats: &State<Stats>) -> Json<WriteResponse> {
+pub fn write_kopper(key: &str, value: &str, db: &State<Kopper>, stats: &State<Stats>) -> Json<WriteResponse> {
     write(key, value, db.inner(), stats)
 }
 
 #[get("/read/b/<key>")]
-pub fn read_brass(key: String, db: &State<Brass>, stats: &State<Stats>) -> Json<ReadResponse> {
+pub fn read_brass(key: &str, db: &State<Brass>, stats: &State<Stats>) -> Json<ReadResponse> {
     read(key, db.inner(), stats)
 }
 
 #[get("/write/b/<key>/<value>")]
-pub fn write_brass(key: String, value: String, db: &State<Brass>, stats: &State<Stats>) -> Json<WriteResponse> {
+pub fn write_brass(key: &str, value: &str, db: &State<Brass>, stats: &State<Stats>) -> Json<WriteResponse> {
     write(key, value, db.inner(), stats)
 }
 
@@ -128,21 +128,21 @@ pub async fn get_stats(read_or_write: String, stats: &State<Stats>) -> Option<Na
 
 // TODO: Move the Database trait to another file and implement it in kopper/brass respectively
 impl Database for Kopper {
-    fn read(&self, key: String) -> std::io::Result<Option<String>> {
+    fn read(&self, key: &str) -> std::io::Result<Option<String>> {
         self.read(key)
     }
 
-    fn write(&self, key: String, value: String) -> std::io::Result<usize> {
+    fn write(&self, key: &str, value: &str) -> std::io::Result<usize> {
         self.write(key, value)
     }
 }
 
 impl Database for Brass {
-    fn read(&self, key: String) -> std::io::Result<Option<String>> {
+    fn read(&self, key: &str) -> std::io::Result<Option<String>> {
         self.read(key)
     }
 
-    fn write(&self, key: String, value: String) -> std::io::Result<usize> {
+    fn write(&self, key: &str, value: &str) -> std::io::Result<usize> {
         self.write(key, value)
     }
 }

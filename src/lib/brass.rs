@@ -53,7 +53,7 @@ impl Brass {
         })
     }
 
-    pub fn read(&self, key: String) -> std::io::Result<Option<String>> {
+    pub fn read(&self, key: &str) -> std::io::Result<Option<String>> {
         let mut state = self.state.lock().unwrap();
         let root = Segment::load(&mut state.root_file, self.segment_size);
 
@@ -71,7 +71,7 @@ impl Brass {
             }
         }
     }
-    pub fn write(&self, key: String, value: String) -> std::io::Result<usize> {
+    pub fn write(&self, key: &str, value: &str) -> std::io::Result<usize> {
         
         // Load root into memory
         let mut state = self.state.lock().unwrap();

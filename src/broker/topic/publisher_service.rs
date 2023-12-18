@@ -15,7 +15,7 @@ pub struct PublisherService {
 impl PublisherService {
     pub fn new(topic_service: Arc<TopicService>, db: Kopper) -> Self {
         let publisher = PublisherService {
-            topic_service: topic_service,
+            topic_service: topic_service, db
         };
         publisher
     }
