@@ -1,5 +1,7 @@
 #![allow(renamed_and_removed_lints)]
 
+use std::sync::Arc;
+
 use rocket::State;
 
 use rocket::response::content;
@@ -16,7 +18,7 @@ pub struct TopicDTO {
 #[post("/topics", data = "<new_topic>")]
 pub fn create_topic(
     new_topic: Form<TopicDTO>,
-    topic_service: &State<TopicService>
+    topic_service: &State<Arc<TopicService>>
 ) -> content::RawHtml<String> {
 
     // TODO: Add validation
@@ -40,7 +42,7 @@ pub fn create_topic(
 // }
 
 #[get("/topics")]
-pub fn get_topics(topic_service: &State<TopicService>) -> content::RawHtml<String> {
+pub fn get_topics(topic_service: &State<Arc<TopicService>>) -> content::RawHtml<String> {
 
     let mut html = String::new();
 

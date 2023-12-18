@@ -1,6 +1,8 @@
 use std::{collections::HashMap, sync::{Arc, Mutex}};
 
-#[derive(Clone)]
+use czkawka::kopper::Kopper;
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TopicEntry {
     pub name: String,
     pub owner: String
@@ -36,31 +38,51 @@ pub struct TopicService {
     // Arc is used to reference data shared between threads. It doesn't provide safe access (that's what Mutex if for),
     // but ensures that object is deallocated when (and not before) the last thread knowing about it finishes.
 
-    topics: Arc< Mutex< HashMap<String, TopicEntry> > >
+    topics: Arc< Mutex< HashMap<String, TopicEntry> > >,
+    db: Kopper
 }
 
 impl TopicService {
-    pub fn new() -> Self {
-        let ts = TopicService{ topics: Arc::default() };
+    pub fn new(db: Kopper) -> Self {
+        let ts = TopicService{ topics: Arc::default(), db };
 
-        // Mock some topics
-        ts.create_topic(TopicEntry { name: String::from("Dobry Topic"), owner: String::from("Dawid") });
-        ts.create_topic(TopicEntry { name: String::from("Chujowy Topic"), owner: String::from("Szatan") });
-        ts.create_topic(TopicEntry { name: String::from("Średni Topic"), owner: String::from("Michal") });
+        // // Mock some topics
+        // ts.create_topic(TopicEntry { name: String::from("Dobry Topic"), owner: String::from("Dawid") });
+        // ts.create_topic(TopicEntry { name: String::from("Chujowy Topic"), owner: String::from("Szatan") });
+        // ts.create_topic(TopicEntry { name: String::from("Średni Topic"), owner: String::from("Michal") });
         ts
     }
 
     pub fn create_topic(&self, topic: TopicEntry) -> bool {
-        let mut locked_map = self.topics
-            .lock() // Lock the Mutex, returns Result<HashMap, Error> - Result<T,Error> ? 
-            .expect("Can't lock create_topic"); // Expect on the Result
 
-        // We don't want to override existing keys
-        if locked_map.contains_key(&topic.name) {
-            return false;
+        match self.db.read(topic.name) { // consider prefix
+            Ok(option) => {
+                match option {
+                    Some(value) => {
+                        return false;
+                    },
+                    None => ()
+                }
+            }
+            Err(e) => todo!()
+        }
+        // let mut locked_map = self.topics
+        //     .lock() // Lock the Mutex, returns Result<HashMap, Error> - Result<T,Error> ? 
+        //     .expect("Can't lock create_topic"); // Expect on the Result
+        
+        // // We don't want to override existing keys
+        // if locked_map.contains_key(&topic.name) {
+        //     return false;
+        // }
+
+        // TU MUSIMY ZROBIC SERIALIZE TopicEntry
+        match self.db.write(topic.name, topic.to_string()) {
+            Ok(res) => return true,
+            Err(err) => todo!()
         }
 
-        locked_map.insert(topic.name.clone(), topic);
+        // locked_map.insert(topic.name.clone(), topic);
+
         true
     }
 
@@ -73,39 +95,12 @@ impl TopicService {
             .collect::<Vec<TopicEntry>>()
     }
 
-    // todo: create fn topic_exists(topic: String)
+    pub fn topic_exists(&self, topic_name: &String) -> bool {
+        return self.topics.lock()
+            .expect("Can't lock on topic_exists")
+            .contains_key(topic_name);
+    }
 }
-
-
-// struct InnerArc<T>
-// {
-//     reference_counter: Mutex<u64>,
-//     obj: T
-// }
-
-// struct Arc<T> {
-//     inner: const * InnerArc<T>
-// }
-
-// impl Arc<T> {
-//     new()
-//     {
-//         inner.reference_counter.lock() += 1;
-//         return inner.obj;
-//     }
-
-//     ~destuctor()
-//     {
-//         if inner.reference_counter.lock() == 0
-//         {
-//             delete inner;
-//         }
-//         else 
-//         {
-//             inner.reference_counter.lock() -= 1;
-//         }
-//     }
-// }
 
 #[test]
 fn test()
