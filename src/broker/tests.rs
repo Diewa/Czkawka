@@ -1,39 +1,9 @@
-use rocket::fs::{FileServer, relative};
 use rocket::http::ContentType;
-use crate::topic::topic_service::TopicService;
-use crate::topic::publisher_service::PublisherService;
-use crate::api;
-use std::sync::Arc;
-use czkawka::kopper::Kopper;
+use crate::router;
 
 fn get_client() -> rocket::local::blocking::Client
 {
-    let kopper = Kopper::create("kopper_database", 4000).expect("Can't create Kopper!");
-    let topic_service = Arc::new(TopicService::new(kopper.clone()));
-    let publisher_service = PublisherService::new(topic_service.clone(), kopper);
-
-    let rocket = 
-            // DI management
-
-    rocket::build()
-        .configure(rocket::Config::figment().merge(("port", 8081)))
-
-        // PUBLISH
-        .mount("/publish", routes![
-            api::receiver::publish_message,
-            api::receiver::get_offset
-        ])
-
-        // ADMIN
-        .mount("/admin", routes![
-            api::admin::get_topics,
-            api::admin::create_topic
-        ])
-        .manage(topic_service)
-        .manage(publisher_service)
-
-        .mount("/", FileServer::from(relative!("src/broker/web")));
-
+    let rocket = router::router();
     rocket::local::blocking::Client::untracked(rocket).expect("Could not build the client")
 }
 

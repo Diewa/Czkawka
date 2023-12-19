@@ -17,7 +17,8 @@ Cargo.lock
 # Added by cargo
 
 /target
-
+/testfiles
+/kopper_database
 .idea
 .vscode
 .DS_Store
