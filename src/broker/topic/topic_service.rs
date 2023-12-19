@@ -1,5 +1,3 @@
-use std::{collections::HashMap, sync::{Arc, Mutex}};
-
 use czkawka::kopper::*;
 use serde::{Serialize, Deserialize};
 use rocket::serde::json::serde_json;
@@ -42,7 +40,7 @@ pub struct TopicService {
     // Arc is used to reference data shared between threads. It doesn't provide safe access (that's what Mutex if for),
     // but ensures that object is deallocated when (and not before) the last thread knowing about it finishes.
 
-    topics: Arc<Mutex< HashMap<String, TopicEntry> >>,
+    // topics: Arc<Mutex< HashMap<String, TopicEntry> >>,
 
     // Database. KopperDB already has all the synchronizations mechanisms
     db: Kopper
@@ -50,78 +48,56 @@ pub struct TopicService {
 
 impl TopicService {
     pub fn new(db: Kopper) -> Self {
-        let ts = TopicService{ topics: Arc::default(), db };
-
-        // // Mock some topics
-        // ts.create_topic(TopicEntry { name: String::from("Dobry Topic"), owner: String::from("Dawid") });
-        // ts.create_topic(TopicEntry { name: String::from("Chujowy Topic"), owner: String::from("Szatan") });
-        // ts.create_topic(TopicEntry { name: String::from("Średni Topic"), owner: String::from("Michal") });
-        ts
+        TopicService{ db }
     }
 
-    pub fn create_topic(&self, topic: TopicEntry) -> bool {
+    pub fn create_topic(&self, topic: TopicEntry) -> Result<usize, std::io::Error> {
 
-        // 1. Add a topic to the database
-        self.db.write(&topic.name, &serde_json::to_string(&topic).expect("Failed to serialize"))
-            .unwrap();
+        let mut entry_list = self.fetch_topic_list()?;
 
-        // 2. Add the topic name (key) to list of topics
-        match self.db.read(TOPICS_KEY) {
-            Ok(value) => {
-                match value {
-                    Some(topic_list) => {
-                        // Topic list exists! Deserialize it
-                        let mut list: Vec<String> = serde_json::from_str(&topic_list).expect("Can't deserialize topic list");
-                        
-                        // Append to it
-                        list.push(topic.name);
+        // Append our new topic to the list
+        entry_list.push(topic);
 
-                        // And write it back
-                        self.db.write(TOPICS_KEY, &serde_json::to_string(&list).expect("Failed to serialize")).unwrap();
-                    },
+        // Write the list back to db
+        let serialized_list = serde_json::to_string(&entry_list).expect("Failed to serialize");
 
-                    // Topics list does not exist yet, let's add it
-                    None => {
-                        self.db.write(TOPICS_KEY, &serde_json::to_string(&vec![topic.name]).expect("Failed to serialize")).unwrap();
-                    },
-                }
-                return true;
+        let db_size = self.db.write(TOPICS_KEY, &serialized_list)?;
+        Ok(db_size)
+    }
+
+    pub fn get_topics(&self) -> Result<Vec<TopicEntry>, std::io::Error> {
+        self.fetch_topic_list()
+    }
+
+    pub fn topic_exists(&self, topic_name: &str) -> Result<bool, std::io::Error> {
+        let topic_list = self.fetch_topic_list()?;
+
+        Ok(topic_list
+            .iter()
+            .any(|x| x.name == topic_name)) // Match on names only
+    }
+
+    fn fetch_topic_list(&self) -> Result<Vec<TopicEntry>, std::io::Error> {
+
+        // Perform db query
+        let db_read_result = self.db.read(TOPICS_KEY)?;
+
+        let entry_list = match db_read_result {
+
+            // Topic table exists in db
+            Some(topic_list) => {
+
+                // Deserialize into vec of entries
+                serde_json::from_str(&topic_list)
+                    .expect("Can't deserialize topic list")
             },
-            Err(error) => {
-                return false;
+
+            // Topics table does not exist yet - so make an empty list
+            None => {
+                vec![]
             },
-        }
+        };
+
+        Ok(entry_list)
     }
-
-    pub fn get_topics(&self) -> Vec<TopicEntry> {
-        self.topics
-            .lock()
-            .expect("Can't lock get_topics")
-            .values()
-            .cloned()
-            .collect::<Vec<TopicEntry>>()
-    }
-
-    pub fn topic_exists(&self, topic_name: &String) -> bool {
-        return self.topics.lock()
-            .expect("Can't lock on topic_exists")
-            .contains_key(topic_name);
-    }
-}
-
-#[test]
-fn test()
-{
-    let v: Vec<i32> = vec![1,2,3,4];
-
-    let arc1 = Arc::new(v);
-
-    let arc2 = arc1.clone();
-    std::thread::spawn(move || {
-        println!("{:?}", arc2);
-    });
-
-    std::thread::spawn(move || {
-        println!("{:?}", arc1);
-    });
 }

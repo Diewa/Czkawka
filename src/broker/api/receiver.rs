@@ -1,24 +1,16 @@
-use serde::Deserialize;
-use rocket::serde::json::Json;
+use rocket::{serde::json::Json, State};
 
-#[derive(Deserialize)]
-pub struct MessagePayload {
-    metadata: Vec<String>,
-    message: String
-}
+use crate::topic::publisher_service::*;
 
 #[post("/publish/<topic_name>", data = "<payload>")]
-pub fn publish_message(topic_name: String, payload: Json<MessagePayload>) {
+pub fn publish_message(
+    topic_name: &str, 
+    payload: Json<MessagePayload>, 
+    publisher_service: &State<PublisherService>) {
     // to do: controller responsible for message publishing 
-   
-}
 
-/*
-#[get("/hello/<name>")]
-fn hello(name: &RawStr) -> String {
-    format!("Hello, {}!", name.as_str())
+    publisher_service.publish_message(topic_name, payload.0).unwrap();
 }
-*/
 
 #[get("/offset")]
 pub fn get_offset() -> &'static str {

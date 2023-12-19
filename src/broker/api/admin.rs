@@ -27,26 +27,30 @@ pub fn create_topic(
         owner: new_topic.owner.clone()
     };
 
-    // TODO: Good place to experiment with errors
-    if topic_service.create_topic(topic_entry.clone()) {
-        return content::RawHtml(topic_entry.to_html_row());
+    match topic_service.create_topic(topic_entry.clone()) {
+        Err(error) => {
+            // TODO: better display the error in html
+            return content::RawHtml(error.to_string());
+        }
+        Ok(_) => () // Ignore the Ok response
     }
 
-    content::RawHtml(String::new())
+    content::RawHtml(topic_entry.to_html_row())
 }
-
-// #[post("/topics2", data)]
-// pub fn create_topic2() -> content::RawHtml<String> {
-//     // TODO: Add validation
-//     content::RawHtml(String::new())
-// }
 
 #[get("/topics")]
 pub fn get_topics(topic_service: &State<Arc<TopicService>>) -> content::RawHtml<String> {
 
     let mut html = String::new();
 
-    for topic_entry in topic_service.get_topics() {
+    let topics = match topic_service.get_topics() {
+        Err(error) => {
+            return content::RawHtml(error.to_string());
+        },
+        Ok(topics) => topics,
+    };
+
+    for topic_entry in topics {
         html.push_str(&topic_entry.to_html_row());
     }
     

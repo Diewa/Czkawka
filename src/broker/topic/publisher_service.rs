@@ -1,9 +1,15 @@
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
+use rocket::serde::json::serde_json;
 
 use czkawka::kopper::Kopper;
-
-use crate::api::receiver::MessagePayload;
 use crate::topic::topic_service::TopicService;
+
+#[derive(Serialize, Deserialize)]
+pub struct MessagePayload {
+    _metadata: Vec<String>,
+    _message: String
+}
 
 // I want to use TopicService in this struct to verify if topic exists.
 // Should I use reference to topic_service? Such approach requires defining lifetime annotation
@@ -20,11 +26,13 @@ impl PublisherService {
         publisher
     }
 
-    pub fn publish_message(&self, topic_name: String, message: MessagePayload) -> Result<(), &str> {
-        if !self.topic_service.topic_exists(&topic_name) {
-            return Err("Topic doesn't exist!");
-        }
+    pub fn publish_message(&self, topic_name: &str, message: MessagePayload) -> Result<(), std::io::Error> {
+        if self.topic_service.topic_exists(topic_name)? {
+            todo!()
+        };
 
-        Ok(())
+        let serialized_message = serde_json::to_string(&message).expect("Failed to serialize");
+        self.db.write("someMessageQueueKeyOrSomething", &serialized_message)?;
+        todo!()
     }
 }
