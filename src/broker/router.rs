@@ -10,18 +10,16 @@ use crate::topic::{
 };
 use czkawka::kopper::Kopper;
 
-const KOPPERDB_FOLDER: &str = "kopper_database";
 const SEGMENT_SIZE: usize = 4000; 
 
-pub fn router() -> Rocket<Build> {
+pub fn router(config: &rocket::Config, db_folder: &str) -> Rocket<Build> {
     
     // DI management
-    let kopper = Kopper::create(KOPPERDB_FOLDER, SEGMENT_SIZE).expect("Can't create Kopper!");
+    let kopper = Kopper::create(db_folder, SEGMENT_SIZE).expect("Can't create Kopper!");
     let topic_service = Arc::new(TopicService::new(kopper.clone()));
     let publisher_service = PublisherService::new(topic_service.clone(), kopper);
 
-    rocket::build()
-        .configure(rocket::Config::figment().merge(("port", 8081)))
+    rocket::custom(config)
 
         // PUBLISH
         .mount("/publish", routes![

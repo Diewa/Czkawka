@@ -12,7 +12,10 @@ mod tests;
 
 use router::router;
 
+const KOPPERDB_FOLDER: &str = "kopper_database";
+const PORT: u16 = 8081;
+
 #[launch]
 fn rocket() -> _ {
-    router()
+    router(&rocket::config::Config { port: PORT, ..Default::default()}, KOPPERDB_FOLDER)
 }

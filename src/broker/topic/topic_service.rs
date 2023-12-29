@@ -10,6 +10,33 @@ pub struct TopicEntry {
     pub owner: String
 }
 
+// This is a tuple. Elements of tuple are accessed with indices: tuple.0
+#[derive(Serialize, Deserialize)]
+pub struct TopicList(Vec<TopicEntry>);
+
+impl TopicList {
+    // Consume the list
+    fn to_json(self) -> String {
+        serde_json::to_string(&self.0)
+            .expect("Failed to serialize topic list")
+    }
+
+    // Create new list
+    fn from_json(str: String) -> Self {
+        serde_json::from_str(&str)
+            .expect("Can't deserialize topic list")
+    }
+
+    fn new() -> Self {
+        TopicList { 0: vec![] }
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<TopicEntry> {
+        self.0.iter()
+    }
+}
+
+
 pub struct TopicService {
 
     // Arc< Mutex< InternalState > > - why?
@@ -56,28 +83,28 @@ impl TopicService {
         let mut entry_list = self.fetch_topic_list()?;
 
         // Append our new topic to the list
-        entry_list.push(topic);
+        entry_list.0.push(topic);
 
         // Write the list back to db
-        let serialized_list = serde_json::to_string(&entry_list).expect("Failed to serialize");
+        let serialized_list = TopicList::to_json(entry_list);
 
         let db_size = self.db.write(TOPICS_KEY, &serialized_list)?;
         Ok(db_size)
     }
 
-    pub fn get_topics(&self) -> Result<Vec<TopicEntry>, std::io::Error> {
+    pub fn get_topics(&self) -> Result<TopicList, std::io::Error> {
         self.fetch_topic_list()
     }
 
     pub fn topic_exists(&self, topic_name: &str) -> Result<bool, std::io::Error> {
         let topic_list = self.fetch_topic_list()?;
 
-        Ok(topic_list
+        Ok(topic_list.0
             .iter()
             .any(|x| x.name == topic_name)) // Match on names only
     }
 
-    fn fetch_topic_list(&self) -> Result<Vec<TopicEntry>, std::io::Error> {
+    fn fetch_topic_list(&self) -> Result<TopicList, std::io::Error> {
 
         // Perform db query
         let db_read_result = self.db.read(TOPICS_KEY)?;
@@ -88,13 +115,12 @@ impl TopicService {
             Some(topic_list) => {
 
                 // Deserialize into vec of entries
-                serde_json::from_str(&topic_list)
-                    .expect("Can't deserialize topic list")
+                TopicList::from_json(topic_list)
             },
 
             // Topics table does not exist yet - so make an empty list
             None => {
-                vec![]
+                TopicList::new()
             },
         };
 

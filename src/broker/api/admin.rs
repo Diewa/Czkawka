@@ -50,7 +50,7 @@ pub fn get_topics(topic_service: &State<Arc<TopicService>>) -> content::RawHtml<
         Ok(topics) => topics,
     };
 
-    for topic_entry in topics {
+    for topic_entry in topics.iter() {
         html.push_str(&topic_entry.to_html_row());
     }
     
