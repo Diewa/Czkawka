@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use rocket::{serde::json::Json, State};
 
 use crate::topic::publisher_service::*;
@@ -6,7 +8,7 @@ use crate::topic::publisher_service::*;
 pub fn publish_message(
     topic_name: &str, 
     payload: Json<MessagePayload>, 
-    publisher_service: &State<PublisherService>) {
+    publisher_service: &State<Arc<PublisherService>>) {
     // to do: controller responsible for message publishing 
 
     publisher_service.publish_message(topic_name, payload.0).unwrap();

@@ -1,0 +1,19 @@
+
+<div class="py-5 text-center">
+  <h3 class="lead">Tu mówimy tylko w jednym topiku</h3>
+  <h2>{name}</h2>
+</div>
+
+<div class="row g-5">
+  <table class="table table-bordered">
+    <thead class="table-light">
+      <tr>
+        <th scope="col">Subskrybenci</th>
+      </tr>
+      {subscribers}
+    </thead>
+</table>
+  {subscribers}
+</div>
+
+<button hx-get="/admin" hx-target="#module" class="btn btn-secondary">Go back</button>

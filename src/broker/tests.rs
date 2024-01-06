@@ -42,8 +42,30 @@ fn test_create_topic()
 
     assert_eq!(response.status(), rocket::http::Status::Ok);
 
-    let response = client.get("/admin/topics").dispatch();
-    assert_eq!(response.into_string().unwrap(), "<tr><td>asd</td><td>fff</td></tr>");
+    let body = client.get("/admin/topics").dispatch().into_string().unwrap();
+    assert!(body.contains("asd"));
+    assert!(body.contains("fff"));
 }
-        
+
+#[test]
+fn test_get_topic_info()
+{
+    let client = get_client();
+
+    client.post("/admin/topics")
+                                            .header(ContentType::Form)
+                                            .body("name=toptopic&owner=mimi")
+                                            .dispatch();
+
+    // Add a subscriber
+    let response = client.post("/admin/topic/toptopic/subscribe")
+                                            .header(ContentType::Form)
+                                            .body("name=new_sub&port=1234")
+                                            .dispatch();
+
+    assert_eq!(response.status(), rocket::http::Status::Ok);
+
+    let response = client.get("/admin/topic/toptopic").dispatch();
+    assert!(response.into_string().unwrap().contains("new_sub"));
+}
         

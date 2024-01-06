@@ -1,0 +1,36 @@
+<div class="py-5 text-center">
+  <img class="d-block mx-auto mb-4 rounded-pill" src="img.jpg" alt="" width="360" height="200">
+  <h2>Admin panel</h2>
+  <p class="lead">Tu można robić super rzeczy admińskie jak dodawanie topików!</p>
+</div>
+
+<div class="row g-5">
+  <div class="col-md-7 p-4">
+    <table class="table table-bordered">
+        <thead class="table-light">
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Owner</th>
+            <th scope="col" style="width:1%"></th>
+          </tr>
+        </thead>
+
+        <!-- This is going to be filled out by HTMX from the endpoint -->
+        <tbody id="topic-table" hx-trigger="load" hx-get="/admin/topics" hx-swap="innerHTML"></tbody>
+    </table>
+  </div>
+
+  <div class="col-md-5 p-4">
+    <form hx-post="/admin/topics" hx-target="#topic-table" hx-swap="beforeend">
+      <div class="mb-3">
+        <label class="form-label">Name</label>
+        <input class="form-control" type="text" name="name" placeholder="Name">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Owner</label>
+        <input class="form-control" type="text" name="owner" placeholder="Owner">
+      </div>
+      <button class="btn btn-primary">Submit</button>
+    </form>
+  </div>
+</div>

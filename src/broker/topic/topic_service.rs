@@ -2,12 +2,18 @@ use czkawka::kopper::*;
 use serde::{Serialize, Deserialize};
 use rocket::serde::json::serde_json;
 
-const TOPICS_KEY: &str = "topics";
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Subscriber {
+    pub name: String,
+    pub endpoint: u16
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TopicEntry {
     pub name: String,
-    pub owner: String
+    pub owner: String,
+    pub subscribers: Vec<Subscriber>
 }
 
 // This is a tuple. Elements of tuple are accessed with indices: tuple.0
@@ -34,10 +40,73 @@ impl TopicList {
     pub fn iter(&self) -> std::slice::Iter<TopicEntry> {
         self.0.iter()
     }
+
+    fn key() -> &'static str {
+        "topics"
+    } 
 }
 
 
 pub struct TopicService {
+    db: Kopper
+}
+
+impl TopicService {
+    pub fn new(db: Kopper) -> Self {
+        TopicService{ db }
+    }
+
+    pub fn create_topic(&self, topic: TopicEntry) -> Result<usize, std::io::Error> {
+
+        let mut entry_list = self.fetch_topic_list()?;
+
+        // Append our new topic to the list
+        entry_list.0.push(topic);
+
+        // Write the list back to db
+        let serialized_list = TopicList::to_json(entry_list);
+
+        let db_size = self.db.write(TopicList::key(), &serialized_list)?;
+        Ok(db_size)
+    }
+
+    pub fn get_topics(&self) -> Result<TopicList, std::io::Error> {
+        self.fetch_topic_list()
+    }
+
+    pub fn topic_exists(&self, topic_name: &str) -> Result<bool, std::io::Error> {
+        let topic_list = self.fetch_topic_list()?;
+
+        Ok(topic_list.0
+            .iter()
+            .any(|x| x.name == topic_name)) // Match on names only
+    }
+
+    fn fetch_topic_list(&self) -> Result<TopicList, std::io::Error> {
+
+        // Perform db query
+        let db_read_result = self.db.read(TopicList::key())?;
+
+        let entry_list = match db_read_result {
+
+            // Topic table exists in db
+            Some(topic_list) => {
+
+                // Deserialize into vec of entries
+                TopicList::from_json(topic_list)
+            },
+
+            // Topics table does not exist yet - so make an empty list
+            None => {
+                TopicList::new()
+            },
+        };
+
+        Ok(entry_list)
+    }
+}
+
+
 
     // Arc< Mutex< InternalState > > - why?
     // It's a pattern in rust used to *share mutable access* to data.
@@ -70,60 +139,3 @@ pub struct TopicService {
     // topics: Arc<Mutex< HashMap<String, TopicEntry> >>,
 
     // Database. KopperDB already has all the synchronizations mechanisms
-    db: Kopper
-}
-
-impl TopicService {
-    pub fn new(db: Kopper) -> Self {
-        TopicService{ db }
-    }
-
-    pub fn create_topic(&self, topic: TopicEntry) -> Result<usize, std::io::Error> {
-
-        let mut entry_list = self.fetch_topic_list()?;
-
-        // Append our new topic to the list
-        entry_list.0.push(topic);
-
-        // Write the list back to db
-        let serialized_list = TopicList::to_json(entry_list);
-
-        let db_size = self.db.write(TOPICS_KEY, &serialized_list)?;
-        Ok(db_size)
-    }
-
-    pub fn get_topics(&self) -> Result<TopicList, std::io::Error> {
-        self.fetch_topic_list()
-    }
-
-    pub fn topic_exists(&self, topic_name: &str) -> Result<bool, std::io::Error> {
-        let topic_list = self.fetch_topic_list()?;
-
-        Ok(topic_list.0
-            .iter()
-            .any(|x| x.name == topic_name)) // Match on names only
-    }
-
-    fn fetch_topic_list(&self) -> Result<TopicList, std::io::Error> {
-
-        // Perform db query
-        let db_read_result = self.db.read(TOPICS_KEY)?;
-
-        let entry_list = match db_read_result {
-
-            // Topic table exists in db
-            Some(topic_list) => {
-
-                // Deserialize into vec of entries
-                TopicList::from_json(topic_list)
-            },
-
-            // Topics table does not exist yet - so make an empty list
-            None => {
-                TopicList::new()
-            },
-        };
-
-        Ok(entry_list)
-    }
-}
