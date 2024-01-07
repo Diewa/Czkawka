@@ -41,25 +41,6 @@ pub fn create_topic(
     content::RawHtml(topic_entry.to_html())
 }
 
-#[get("/topics")]
-pub fn get_topics(topic_service: &State<Arc<TopicService>>) -> content::RawHtml<String> {
-
-    let mut html = String::new();
-
-    let topics = match topic_service.get_topics() {
-        Err(error) => {
-            return content::RawHtml(error.to_string());
-        },
-        Ok(topics) => topics,
-    };
-
-    for topic_entry in topics.iter() {
-        html.push_str(&topic_entry.to_html());
-    }
-    
-    content::RawHtml(html)
-}
-
 #[get("/topic/<name>")]
 pub fn get_topic(name: &str, topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
 
@@ -95,9 +76,26 @@ pub fn get_topic(name: &str, topic_service: &State<Arc<TopicService>>, templater
 }
 
 #[get("/")]
-pub fn index(templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
+pub fn index(topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
+    
+    let mut html = String::new();
 
-    templater.get("main", HashMap::new())
+    let topics = match topic_service.get_topics() {
+        Err(error) => {
+            return content::RawHtml(error.to_string());
+        },
+        Ok(topics) => topics,
+    };
+
+    for topic_entry in topics.iter() {
+        html.push_str(&topic_entry.to_html());
+    }
+
+    let vars = HashMap::from([
+        ("topics", html),
+    ]);
+    
+    templater.get("main", vars)
 }
 
 trait ToHtml {

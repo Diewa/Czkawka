@@ -16,7 +16,9 @@
         </thead>
 
         <!-- This is going to be filled out by HTMX from the endpoint -->
-        <tbody id="topic-table" hx-trigger="load" hx-get="/admin/topics" hx-swap="innerHTML"></tbody>
+        <tbody id="topic-table">
+          {topics}
+        </tbody>
     </table>
   </div>
 

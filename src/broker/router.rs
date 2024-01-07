@@ -33,7 +33,6 @@ pub fn router(config: &rocket::Config, db_folder: &str) -> Rocket<Build> {
         // ADMIN
         .mount("/admin", routes![
             api::admin::get_topic,  
-            api::admin::get_topics,
             api::admin::create_topic,
             api::admin::index
         ])

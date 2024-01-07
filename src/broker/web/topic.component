@@ -5,15 +5,21 @@
 </div>
 
 <div class="row g-5">
-  <table class="table table-bordered">
-    <thead class="table-light">
-      <tr>
-        <th scope="col">Subskrybenci</th>
-      </tr>
+  <div class="col-md-7 p-4">
+    <table class="table table-bordered">
+      <thead class="table-light">
+        <tr>
+          <th scope="col">Subskrybenci</th>
+        </tr>
+        {subscribers}
+      </thead>
+    </table>
+    <tbody id="sub-table">
       {subscribers}
-    </thead>
-</table>
-  {subscribers}
+    </tbody>
+  </div>
 </div>
+
+
 
 <button hx-get="/admin" hx-target="#module" class="btn btn-secondary">Go back</button>

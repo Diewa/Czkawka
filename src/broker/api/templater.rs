@@ -37,6 +37,8 @@ impl Templater {
         let mut result = String::new();
 
         let mut buffer_index = 0;
+
+        // TODO: cache parsing result
         for var in Templater::parse(&buffer) {
 
             // 1. Insert text from the last index till start of the next variable
