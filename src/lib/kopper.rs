@@ -349,6 +349,7 @@ impl SharedState {
         // TODO: update unused counters for all files
 
         state.current_file_index = *state.files.first_key_value().unwrap().0;
+        state.offset = state.files.first_key_value().unwrap().1.file.metadata().unwrap().len() as usize;
         Ok(state)
     }
 

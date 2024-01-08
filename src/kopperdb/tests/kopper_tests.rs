@@ -70,3 +70,20 @@ fn database_does_not_grow_forever() {
     
     assert!(size < all_entries_together_size, "{} >= {}", size, all_entries_together_size);
 }
+
+#[test]
+fn file_offset_is_set_correctly_after_recovery() {
+    let client = TestClient::new(DBType::Kopper).set_seg_size(100).build();
+
+    // Write to a file - offset is len(key + value) + 2
+    client.get(format!("/write/some_key/222222")).dispatch();
+
+    // Recreate memory part of database from files
+    let client = client.build();
+    
+    // Write to a file again - offset should be recovered too, and correctly saved in in-memory table
+    client.get(format!("/write/some_key/333333")).dispatch();
+
+    let read_response = client.get("/read/some_key").dispatch();
+    assert_eq!(read_response.into_string().unwrap(), "{\"value\":\"333333\",\"error\":\"OK\"}");
+}
