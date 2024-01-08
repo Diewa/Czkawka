@@ -5,21 +5,34 @@
 </div>
 
 <div class="row g-5">
-  <div class="col-md-7 p-4">
+  <div class="col-md-7">
     <table class="table table-bordered">
       <thead class="table-light">
         <tr>
           <th scope="col">Subskrybenci</th>
         </tr>
-        {subscribers}
       </thead>
     </table>
     <tbody id="sub-table">
       {subscribers}
     </tbody>
   </div>
-</div>
 
+  <div class="col-md-5 p-4">
+    <form hx-post="/admin/topics/{name}/subscribe" hx-target="#sub-table" hx-swap="beforeend">
+      <div class="mb-3">
+        <label class="form-label">Name</label>
+        <input class="form-control" type="text" name="name" placeholder="Name">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Endpoint</label>
+        <input class="form-control" type="text" name="endpoint" placeholder="Endpoint">
+      </div>
+      <button class="btn btn-primary">Add</button>
+    </form>
+  </div>
+
+</div>
 
 
 <button hx-get="/admin" hx-target="#module" class="btn btn-secondary">Go back</button>
