@@ -102,11 +102,21 @@ trait ToHtml {
     fn to_html(&self) -> String;
 }
 
-impl ToHtml for TopicEntry {
+impl<T: ToHtml> ToHtml for Vec<T> {
+    fn to_html(&self) -> String {
+        let mut html = String::new();
+        for sub in self {
+            html.push_str(&sub.to_html());
+        }
+        html
+    }
+}
 
+impl ToHtml for TopicEntry {
     fn to_html(&self) -> String {
         let name = &self.name;
         let owner = &self.owner;
+
         String::from(&format!(
             "<tr class=\"align-middle\">
                 <td>{name}</td>
@@ -122,25 +132,15 @@ impl ToHtml for TopicEntry {
 }
 
 impl ToHtml for Subscriber {
-
     fn to_html(&self) -> String {
         let name = &self.name;
         let endpoint = &self.endpoint.to_string();
+
         String::from(format!(
             "<tr>
                 <td>{name}</td>
                 <td>{endpoint}</td>
             </tr>"
         ))
-    }
-}
-
-impl ToHtml for Vec<Subscriber> {
-    fn to_html(&self) -> String {
-        let mut html = String::new();
-        for sub in self {
-            html.push_str(&sub.to_html());
-        }
-        html
     }
 }
