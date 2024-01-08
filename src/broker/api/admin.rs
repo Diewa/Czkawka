@@ -98,6 +98,22 @@ pub fn index(topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Tem
     templater.get("main", vars)
 }
 
+#[derive(FromForm)]
+pub struct SubscriberDTO {
+    name: String,
+    endpoint: String
+}
+
+#[post("/admin/topics/<name>/subscribe", data = "<subscriber>")]
+pub fn create_subscriber(
+    name: &str,
+    subscriber: Form<SubscriberDTO>,
+    topic_service: &State<Arc<TopicService>>, 
+    templater: &State<Arc<Templater>>
+) {
+    todo!()
+}
+
 trait ToHtml {
     fn to_html(&self) -> String;
 }

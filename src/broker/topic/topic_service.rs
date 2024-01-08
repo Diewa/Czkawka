@@ -1,6 +1,6 @@
 use czkawka::kopper::*;
 use serde::{Serialize, Deserialize};
-use rocket::serde::json::serde_json;
+use rocket::{serde::json::serde_json, form::name};
 
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -46,7 +46,6 @@ impl TopicList {
     } 
 }
 
-
 pub struct TopicService {
     db: Kopper
 }
@@ -81,6 +80,17 @@ impl TopicService {
             .iter()
             .any(|x| x.name == topic_name)) // Match on names only
     }
+
+    pub fn get_topic(&self, topic_name: &str) -> Result<Option<TopicEntry>, std::io::Error> {
+        let topic_list = self.fetch_topic_list()?;
+
+        let topic = topic_list.0
+            .iter()
+            .find(|x| x.name == topic_name);
+
+        todo!()
+    }
+
 
     fn fetch_topic_list(&self) -> Result<TopicList, std::io::Error> {
 
