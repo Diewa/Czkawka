@@ -8,7 +8,7 @@ use rocket::State;
 use rocket::response::content;
 use rocket::form::{Form, FromForm};
 
-use crate::topic::topic_service::{TopicService, TopicEntry, Subscriber};
+use crate::topic::topic_service::{TopicService, TopicEntry, SubscriptionEntry};
 use crate::api::templater::Templater;
 
 #[derive(FromForm)]
@@ -104,13 +104,21 @@ pub struct SubscriberDTO {
     endpoint: String
 }
 
-#[post("/admin/topics/<name>/subscribe", data = "<subscriber>")]
+#[post("/admin/topics/<topic_name>/subscribe", data = "<subscriber>")]
 pub fn create_subscriber(
-    name: &str,
+    topic_name: &str,
     subscriber: Form<SubscriberDTO>,
     topic_service: &State<Arc<TopicService>>, 
     templater: &State<Arc<Templater>>
 ) {
+
+    let subscription_entry = SubscriptionEntry {
+        name: subscriber.name.clone(),
+        endpoint: subscriber.endpoint.clone()
+    };
+
+    topic_service.subscribe_topic(topic_name, subscription_entry)
+    // templater.generateSth(subscriber)
     todo!()
 }
 

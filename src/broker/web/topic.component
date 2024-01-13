@@ -19,6 +19,7 @@
   </div>
 
   <div class="col-md-5 p-4">
+    <span> Add subscriber </span>
     <form hx-post="/admin/topics/{name}/subscribe" hx-target="#sub-table" hx-swap="beforeend">
       <div class="mb-3">
         <label class="form-label">Name</label>

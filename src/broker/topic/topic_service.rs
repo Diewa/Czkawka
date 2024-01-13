@@ -1,19 +1,24 @@
 use czkawka::kopper::*;
 use serde::{Serialize, Deserialize};
 use rocket::{serde::json::serde_json, form::name};
+use crate::api::admin::get_topic;
 
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct Subscriber {
-    pub name: String,
-    pub endpoint: u16
+enum TopicServiceError {
+    TopicNotFound(String)
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TopicEntry {
     pub name: String,
     pub owner: String,
-    pub subscribers: Vec<Subscriber>
+    pub subscribers: Vec<SubscriptionEntry>
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SubscriptionEntry {
+    pub name: String,
+    pub endpoint: String
 }
 
 // This is a tuple. Elements of tuple are accessed with indices: tuple.0
@@ -81,17 +86,35 @@ impl TopicService {
             .any(|x| x.name == topic_name)) // Match on names only
     }
 
-    pub fn get_topic(&self, topic_name: &str) -> Result<Option<TopicEntry>, std::io::Error> {
-        let topic_list = self.fetch_topic_list()?;
-
-        let topic = topic_list.0
+    fn find_topic_in_list(&self, topic_name: &str, topic_list: &TopicList) -> Result<&TopicEntry, TopicServiceError> {
+        // czemu tu uzywamy topic_list.0 skoro metoda iter() jest zaimplementowa w strukturze i robi dokładnie to samo?
+        let option = topic_list
             .iter()
             .find(|x| x.name == topic_name);
 
-        todo!()
+        match option {
+            Some(entry) => {
+                return Ok(entry)
+            }
+
+            None => Err(TopicServiceError::TopicNotFound(format!("Topic with name {} not found", topic_name)))
+        }
+    }
+
+    pub fn subscribe_topic(&self, topic_name: &str, subscription_entry: SubscriptionEntry) -> Result<(), std::io::Error> {
+        let mut entry_list = self.fetch_topic_list()?;
+        let mut topic = self.find_topic_in_list(topic_name, &entry_list)?;
+
+        topic.subscribers.push(subscription_entry);
+
+        let serialized_list = TopicList::to_json(entry_list);
+
+        self.db.write(TopicList::key(), &serialized_list)?;
+        Ok(())
     }
 
 
+    // todo: add cache
     fn fetch_topic_list(&self) -> Result<TopicList, std::io::Error> {
 
         // Perform db query
