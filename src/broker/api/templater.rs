@@ -1,8 +1,5 @@
 use std::{fs::OpenOptions, io::Read, collections::HashMap};
 
-use rocket::response::content;
-
-
 pub struct Templater {
     web_path: String
 }
@@ -18,7 +15,7 @@ impl Templater {
         Templater { web_path: web_path.to_owned() }
     }
 
-    pub fn get(&self, component_name: &str, variables: HashMap<&str, String>) -> content::RawHtml<String> {
+    pub fn get(&self, component_name: &str, variables: HashMap<&str, String>) -> String {
 
         // Construct name of the component file
         let file_name = self.web_path.clone() + "/" + component_name + ".component";
@@ -47,8 +44,7 @@ impl Templater {
             // 2. Add the variable itself
             match variables.get(var.name.as_str()) {
                 None => {
-                    return content::RawHtml(
-                        format!("Error parsing template! Missing attribute: {}", var.name));
+                    return format!("Error parsing template! Missing attribute: {}", var.name);
                 }
                 Some(html) => {
                     result.push_str(html);
@@ -61,7 +57,7 @@ impl Templater {
 
         // 4. Add the remaining text
         result.push_str(std::str::from_utf8(&buffer[buffer_index..]).unwrap());
-        return content::RawHtml(result);
+        return result;
     }
 
     fn parse(html: &Vec<u8>) -> Vec<Variable> {

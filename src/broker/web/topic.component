@@ -1,7 +1,7 @@
 
 <div class="py-5 text-center">
   <h3 class="lead">Tu mówimy tylko w jednym topiku</h3>
-  <h2>{name}</h2>
+  <h2><b>{name}</b> by {owner}</h2> 
 </div>
 
 <div class="row g-5">
@@ -11,7 +11,6 @@
         <tr>
           <th scope="col">Subskrybenci</th>
         </tr>
-        {subscribers}
       </thead>
     </table>
     <tbody id="sub-table">
@@ -22,4 +21,4 @@
 
 
 
-<button hx-get="/admin" hx-target="#module" class="btn btn-secondary">Go back</button>
+<button hx-get="/admin" hx-target="#module" hx-push-url="true" class="btn btn-secondary">Go back</button>

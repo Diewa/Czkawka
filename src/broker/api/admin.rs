@@ -41,8 +41,10 @@ pub fn create_topic(
     content::RawHtml(topic_entry.to_html())
 }
 
-#[get("/topic/<name>")]
-pub fn get_topic(name: &str, topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
+#[get("/api/topic/<topic_name>")]
+pub fn get_topic(topic_name: &str, topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
+
+    // TODO: Move the following to topic_serice 
 
     // Fetch all topics 
     let topics = match topic_service.get_topics() {
@@ -55,13 +57,13 @@ pub fn get_topic(name: &str, topic_service: &State<Arc<TopicService>>, templater
     // Look for specific topic
     let mut topic_found = None;
     for topic in topics.iter() {
-        if name == topic.name {
+        if topic_name == topic.name {
             topic_found = Some(topic);
         }
     }
 
     if !topic_found.is_some() {
-        return content::RawHtml(format!("Topic {} doesn't exist!", name));
+        return content::RawHtml(format!("Topic {} doesn't exist!", topic_name));
     }
 
     let topic = topic_found.unwrap();
@@ -72,14 +74,12 @@ pub fn get_topic(name: &str, topic_service: &State<Arc<TopicService>>, templater
         ("subscribers", topic.subscribers.to_html())
     ]);
 
-    templater.get("topic", vars)
+    content::RawHtml(templater.get("topic", vars))
 }
 
 #[get("/")]
-pub fn index(topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
+pub fn web_index(topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
     
-    let mut html = String::new();
-
     let topics = match topic_service.get_topics() {
         Err(error) => {
             return content::RawHtml(error.to_string());
@@ -87,17 +87,32 @@ pub fn index(topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Tem
         Ok(topics) => topics,
     };
 
-    for topic_entry in topics.iter() {
-        html.push_str(&topic_entry.to_html());
-    }
-
-    let vars = HashMap::from([
-        ("topics", html),
+    // Construct main component
+    let topics_vars = HashMap::from([
+        ("topics", topics.0.to_html())
     ]);
     
-    templater.get("main", vars)
+    let main_component = templater.get("main", topics_vars);
+
+    // Construct index component using main component
+    let index_vars = HashMap::from([
+        ("module", main_component),
+    ]);
+
+    content::RawHtml(templater.get("index", index_vars))
 }
 
+#[get("/topic/<topic_name>")]
+pub fn web_topic(topic_name: &str, topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
+    
+    // Construct index component
+    let index_vars = HashMap::from([
+        ("module", get_topic(topic_name, topic_service, templater).0),
+    ]);
+
+    content::RawHtml(templater.get("index", index_vars))
+}
+    
 trait ToHtml {
     fn to_html(&self) -> String;
 }
@@ -122,8 +137,9 @@ impl ToHtml for TopicEntry {
                 <td>{name}</td>
                 <td>{owner}</td>
                 <td class=\"text-center\">
-                    <button hx-get=\"/admin/topic/{name}\" 
-                            hx-target=\"#module\" 
+                    <button hx-get=\"/admin/api/topic/{name}\" 
+                            hx-target=\"#module\"
+                            hx-push-url=\"/admin/topic/{name}\"
                             class=\"btn btn-secondary\">Edit
                     </button>
                 </td>

@@ -1,5 +1,5 @@
 <div class="py-5 text-center">
-  <img class="d-block mx-auto mb-4 rounded-pill" src="img.jpg" alt="" width="360" height="200">
+  <img class="d-block mx-auto mb-4 rounded-pill" src="static/img.jpg" alt="" width="360" height="200">
   <h2>Admin panel</h2>
   <p class="lead">Tu można robić super rzeczy admińskie jak dodawanie topików!</p>
 </div>

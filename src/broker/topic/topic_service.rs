@@ -18,7 +18,7 @@ pub struct TopicEntry {
 
 // This is a tuple. Elements of tuple are accessed with indices: tuple.0
 #[derive(Serialize, Deserialize)]
-pub struct TopicList(Vec<TopicEntry>);
+pub struct TopicList(pub Vec<TopicEntry>);
 
 impl TopicList {
     // Consume the list
