@@ -41,8 +41,8 @@ pub fn create_topic(
     content::RawHtml(topic_entry.to_html())
 }
 
-#[get("/api/topic/<topic_name>")]
-pub fn get_topic(topic_name: &str, topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
+#[get("/module/topic/<topic_name>")]
+pub fn module_topic(topic_name: &str, topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
 
     // TODO: Move the following to topic_serice 
 
@@ -77,8 +77,8 @@ pub fn get_topic(topic_name: &str, topic_service: &State<Arc<TopicService>>, tem
     content::RawHtml(templater.get("topic", vars))
 }
 
-#[get("/")]
-pub fn web_index(topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
+#[get("/module/main")]
+pub fn module_main(topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
     
     let topics = match topic_service.get_topics() {
         Err(error) => {
@@ -91,27 +91,35 @@ pub fn web_index(topic_service: &State<Arc<TopicService>>, templater: &State<Arc
     let topics_vars = HashMap::from([
         ("topics", topics.0.to_html())
     ]);
-    
-    let main_component = templater.get("main", topics_vars);
 
-    // Construct index component using main component
+    content::RawHtml(templater.get("main", topics_vars))
+}
+
+// Direct browser URL handlers
+#[get("/")]
+pub fn web_main(templater: &State<Arc<Templater>>) -> content::RawHtml<String>{
+    
+    // Construct index component
     let index_vars = HashMap::from([
-        ("module", main_component),
+        ("url", format!("/admin/module/main")),
+        ("browser_url", format!("/admin")),
     ]);
 
     content::RawHtml(templater.get("index", index_vars))
 }
 
 #[get("/topic/<topic_name>")]
-pub fn web_topic(topic_name: &str, topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
+pub fn web_topic(topic_name: &str, templater: &State<Arc<Templater>>) -> content::RawHtml<String>{
     
     // Construct index component
-    let index_vars = HashMap::from([
-        ("module", get_topic(topic_name, topic_service, templater).0),
+    let index_vars: HashMap<&str, String> = HashMap::from([
+        ("url", format!("/admin/module/topic/{topic_name}")),
+        ("browser_url", format!("/admin/topic/{topic_name}")),
     ]);
 
     content::RawHtml(templater.get("index", index_vars))
 }
+
     
 trait ToHtml {
     fn to_html(&self) -> String;
@@ -137,7 +145,7 @@ impl ToHtml for TopicEntry {
                 <td>{name}</td>
                 <td>{owner}</td>
                 <td class=\"text-center\">
-                    <button hx-get=\"/admin/api/topic/{name}\" 
+                    <button hx-get=\"/admin/module/topic/{name}\" 
                             hx-target=\"#module\"
                             hx-push-url=\"/admin/topic/{name}\"
                             class=\"btn btn-secondary\">Edit

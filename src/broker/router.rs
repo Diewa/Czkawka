@@ -31,16 +31,18 @@ pub fn router(config: &rocket::Config, db_folder: &str) -> Rocket<Build> {
         ])
 
         // ADMIN API
+        .mount("/", routes![api::admin::web_main])
         .mount("/admin", routes![
             // Htmx endpoints
-            api::admin::get_topic,  
             api::admin::create_topic,
+            
+            api::admin::module_main,
+            api::admin::module_topic,
 
-            // Browser URL access
-            api::admin::web_index,
-            api::admin::web_topic
+            // Direct browser URL access helpers
+            api::admin::web_main, // /admin
+            api::admin::web_topic // /admin/topic/<name>
         ])
-        .mount("/", routes![api::admin::web_index])
         .manage(topic_service)
         .manage(publisher_service)
         
