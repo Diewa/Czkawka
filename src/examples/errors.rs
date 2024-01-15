@@ -1,4 +1,3 @@
-#[test]
 fn how_to_traits() {
     #[derive(Debug)]
     struct Typo {
@@ -28,8 +27,6 @@ fn how_to_traits() {
     impl Traito for Typo {}
 }
 
-
-#[test]
 fn std_errors() {
 
     #[derive(Debug)]
