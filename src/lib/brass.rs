@@ -1,5 +1,7 @@
 use std::{fs::{File, self, OpenOptions}, sync::{Mutex, Arc}, io::{self, Read, Seek, Write}};
 
+use crate::kopper::KopperError;
+
 const ROOT_NAME: &str = "0";
 
 pub struct Brass {
@@ -12,19 +14,8 @@ struct SharedState {
     root_file: File,
 }
 
-#[derive(Debug)]
-pub enum BrassError {
-    IO(io::Error)
-}
-
-impl From<io::Error> for BrassError {
-    fn from(err: io::Error) -> Self {
-        BrassError::IO(err)
-    }
-}
-
 impl Brass {
-    pub fn create(path: &str, segment_size: usize) -> Result<Self, BrassError> {
+    pub fn create(path: &str, segment_size: usize) -> Result<Self, KopperError> {
 
         // Create the DB directory if it doesn't exist
         match fs::create_dir_all(path) { _ => () };
@@ -53,7 +44,7 @@ impl Brass {
         })
     }
 
-    pub fn read(&self, key: &str) -> std::io::Result<Option<String>> {
+    pub fn read(&self, key: &str) -> Result<String, KopperError> {
         let mut state = self.state.lock().unwrap();
         let root = Segment::load(&mut state.root_file, self.segment_size);
 
@@ -61,17 +52,17 @@ impl Brass {
             SegmentIter::Leaf(iter) => {
                 for (k, value, _) in iter {
                     if k == key {
-                        return Ok(Some(value.to_owned()));
+                        return Ok(value.to_owned());
                     }
                 }
-                return Ok(None)
+                return Err(KopperError::DoesNotExist(key.to_owned()))
             },
             SegmentIter::Node(_) => {
                 todo!()
             }
         }
     }
-    pub fn write(&self, key: &str, value: &str) -> std::io::Result<usize> {
+    pub fn write(&self, key: &str, value: &str) -> Result<usize, KopperError> {
         
         // Load root into memory
         let mut state = self.state.lock().unwrap();

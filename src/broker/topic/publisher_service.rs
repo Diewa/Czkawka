@@ -32,7 +32,9 @@ impl PublisherService {
         };
 
         let serialized_message = serde_json::to_string(&message).expect("Failed to serialize");
-        self.db.write("someMessageQueueKeyOrSomething", &serialized_message)?;
+
+        // TODO: Fix this with a publisherservice errors!!!
+        self.db.write("someMessageQueueKeyOrSomething", &serialized_message).expect("Couldn't write to Kopper!");
         todo!()
     }
 }

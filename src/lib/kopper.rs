@@ -62,7 +62,7 @@ impl FromStr for FileIndex {
     type Err = KopperError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (base, index) = s.split_once('_').ok_or(KopperError::Parse)?;
+        let (base, index) = s.split_once('_').ok_or(KopperError::ParseFileName)?;
         Ok(FileIndex { base: base.parse()?, index: index.parse()? })
     }
 }
@@ -98,12 +98,12 @@ impl Kopper {
         self.path.clone()
     }
 
-    pub fn read(&self, key: &str) -> std::io::Result<Option<String>> {
+    pub fn read(&self, key: &str) -> Result<String, KopperError> {
         let state = self.state.lock().unwrap();
 
         let table_entry = match state.table.get(key) {
             Some(table_entry) => table_entry,
-            None => return Ok(None),
+            None => return Err(KopperError::DoesNotExist(key.to_owned())),
         };
 
         let mut file = 
@@ -119,13 +119,11 @@ impl Kopper {
         file.seek(SeekFrom::Start(offset as u64))?;
         file.read_exact(&mut buffer)?;
 
-        Ok(Some(
-            String::from_utf8(buffer)
-                .expect("Can't deserialize buffer to string")
-        ))
+        Ok(String::from_utf8(buffer)
+            .expect("Can't deserialize buffer to string"))
     }
 
-    pub fn write(&self, key: &str, value: &str) -> std::io::Result<usize> {
+    pub fn write(&self, key: &str, value: &str) -> Result<usize, KopperError> {
         
         let mut state = self.state.lock().unwrap();
 
@@ -278,23 +276,17 @@ impl Kopper {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum KopperError {
-    IO(io::Error),
-    ParseInt(num::ParseIntError),
-    Parse
-}
+    #[error(transparent)]
+    IO{#[from] source: io::Error},
+    #[error(transparent)]
+    ParseInt{#[from] source: num::ParseIntError},
+    #[error("Can't parse file name into index")]
+    ParseFileName,
 
-impl From<io::Error> for KopperError {
-    fn from(err: io::Error) -> Self {
-        KopperError::IO(err)
-    }
-}
-
-impl From<num::ParseIntError> for KopperError {
-    fn from(err: num::ParseIntError) -> Self {
-        KopperError::ParseInt(err)
-    }
+    #[error("No such item: {0}")]
+    DoesNotExist(String)
 }
 
 impl SharedState {

@@ -33,10 +33,6 @@ impl TopicList {
             .expect("Can't deserialize topic list")
     }
 
-    fn new() -> Self {
-        TopicList { 0: vec![] }
-    }
-
     pub fn iter(&self) -> std::slice::Iter<TopicEntry> {
         self.0.iter()
     }
@@ -66,7 +62,12 @@ impl TopicService {
         // Write the list back to db
         let serialized_list = TopicList::to_json(entry_list);
 
-        let db_size = self.db.write(TopicList::key(), &serialized_list)?;
+        let db_size = match self.db.write(TopicList::key(), &serialized_list) {
+            Ok(x) => x,
+
+            // TODO: Fix with new errors!
+            Err(err) => return Err(std::io::Error::new(std::io::ErrorKind::Other, err)),
+        };
         Ok(db_size)
     }
 
@@ -83,26 +84,19 @@ impl TopicService {
     }
 
     fn fetch_topic_list(&self) -> Result<TopicList, std::io::Error> {
-
-        // Perform db query
-        let db_read_result = self.db.read(TopicList::key())?;
-
-        let entry_list = match db_read_result {
-
-            // Topic table exists in db
-            Some(topic_list) => {
-
-                // Deserialize into vec of entries
-                TopicList::from_json(topic_list)
+        
+        match self.db.read(TopicList::key()) {
+            Ok(topic_list) => {
+                // Found the entry, let's deserialize it
+                Ok(TopicList::from_json(topic_list))
             },
-
-            // Topics table does not exist yet - so make an empty list
-            None => {
-                TopicList::new()
+            Err(err) => {
+                println!("Can't fetch topic list due to: {}", err);
+                
+                // TODO: Fix this with dedicated topicservice error!!!
+                Err(std::io::Error::new(std::io::ErrorKind::Other, err))
             },
-        };
-
-        Ok(entry_list)
+        }
     }
 }
 
