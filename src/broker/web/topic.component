@@ -21,4 +21,4 @@
 
 
 
-<button hx-get="/admin/module/main" hx-target="#module" hx-push-url="true" class="btn btn-secondary">Go back</button>
+<button hx-get="/admin/module/main" hx-target="#module" hx-push-url="/admin" class="btn btn-secondary">Go back</button>
