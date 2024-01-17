@@ -1,11 +1,12 @@
+
 #[test]
 fn how_to_traits() {
     #[derive(Debug)]
     struct Typo {
-        x: u32
+        _x: u32
     }
 
-    let t = Typo { x: 5 };
+    let t = Typo { _x: 5 };
 
     impl std::fmt::Display for Typo {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -125,4 +126,49 @@ fn thiserror_errors() {
     }
 }
 
-fn main() {}
+
+fn general_and_specific_error() {
+
+    use czkawka::from_error;
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum DuzyError {
+        #[error("General Error")]
+        GeneralError(anyhow::Error),
+
+        #[error("Specific Error")]
+        SpecificError
+    }
+
+    from_error!(DuzyError::GeneralError, std::io::Error, std::num::ParseIntError);
+
+    fn fallo() -> Result<u32, DuzyError> {
+
+        // io::std::Error
+        std::fs::read_to_string("plik_ktory_nie_istnieje")?;
+
+        // std::num::ParseIntError
+        "a".parse::<u32>()?;
+
+        // DuzyError::GuwnianyError
+        Err(DuzyError::SpecificError)?;
+
+        Ok(5)
+    }
+
+    if let Err(error) = fallo() {
+        match error {
+            DuzyError::SpecificError => {
+                println!("Ale guwno omg, {}", error);
+                return;
+            }
+
+            // All other errors
+            e => println!("{e}"),
+        }
+    }
+}
+
+fn main() {
+    general_and_specific_error();
+}

@@ -55,7 +55,7 @@ impl Brass {
                         return Ok(value.to_owned());
                     }
                 }
-                return Err(KopperError::DoesNotExist(key.to_owned()))
+                return Err(KopperError::KeyDoesNotExist(key.to_owned()))
             },
             SegmentIter::Node(_) => {
                 todo!()

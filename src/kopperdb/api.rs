@@ -39,7 +39,7 @@ pub fn read(key: &str, db: &impl Database, stats: &State<Stats>) -> Json<ReadRes
             }
         },
 
-        Err(KopperError::DoesNotExist(_)) => {
+        Err(KopperError::KeyDoesNotExist(_)) => {
     
             ReadResponse { 
                 value: "".to_string(),

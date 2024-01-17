@@ -1,4 +1,3 @@
-use core::num;
 use std::{
     collections::{HashMap, BTreeMap}, 
     sync::{Mutex, mpsc::channel}, 
@@ -9,6 +8,8 @@ use std::{
     str::FromStr, 
     ops::Add
 };
+
+use crate::from_error;
 
 #[derive(Clone)]
 pub struct Kopper {
@@ -62,7 +63,7 @@ impl FromStr for FileIndex {
     type Err = KopperError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (base, index) = s.split_once('_').ok_or(KopperError::ParseFileName)?;
+        let (base, index) = s.split_once('_').ok_or(KopperError::InternalError(anyhow::anyhow!("Can't parse database file: {s}")))?;
         Ok(FileIndex { base: base.parse()?, index: index.parse()? })
     }
 }
@@ -103,13 +104,13 @@ impl Kopper {
 
         let table_entry = match state.table.get(key) {
             Some(table_entry) => table_entry,
-            None => return Err(KopperError::DoesNotExist(key.to_owned())),
+            None => return Err(KopperError::KeyDoesNotExist(key.to_owned())),
         };
 
         let mut file = 
-            state.files
-                .get(&table_entry.file_index).unwrap() // Can't recover from this. Should panic.
-                .file.try_clone().unwrap();
+        state.files
+            .get(&table_entry.file_index).unwrap() // Can't recover from this. Should panic.
+            .file.try_clone().unwrap();
 
         // TODO: This is OK because files are never deleted. 
 
@@ -119,8 +120,7 @@ impl Kopper {
         file.seek(SeekFrom::Start(offset as u64))?;
         file.read_exact(&mut buffer)?;
 
-        Ok(String::from_utf8(buffer)
-            .expect("Can't deserialize buffer to string"))
+        Ok(String::from_utf8(buffer)?)
     }
 
     pub fn write(&self, key: &str, value: &str) -> Result<usize, KopperError> {
@@ -279,15 +279,13 @@ impl Kopper {
 #[derive(Debug, thiserror::Error)]
 pub enum KopperError {
     #[error(transparent)]
-    IO{#[from] source: io::Error},
-    #[error(transparent)]
-    ParseInt{#[from] source: num::ParseIntError},
-    #[error("Can't parse file name into index")]
-    ParseFileName,
+    InternalError(anyhow::Error),
 
     #[error("No such item: {0}")]
-    DoesNotExist(String)
+    KeyDoesNotExist(String)
 }
+
+from_error!(KopperError::InternalError, std::num::ParseIntError, std::io::Error, std::str::Utf8Error, std::string::FromUtf8Error);
 
 impl SharedState {
     fn create(path: &str) -> Result<SharedState, KopperError> {
@@ -303,9 +301,9 @@ impl SharedState {
         match fs::create_dir_all(path) { _ => () };
 
         // Recover all files
-        for dir_entry in fs::read_dir(path).unwrap() {
+        for dir_entry in fs::read_dir(path)? {
 
-            let dir_entry = dir_entry.unwrap();
+            let dir_entry = dir_entry?;
 
             let mut file = 
                 OpenOptions::new()
@@ -322,7 +320,7 @@ impl SharedState {
 
             println!("Recovering file: {}", file_index);
 
-            state.size += SharedState::recover_file(&mut state.table, file_index, &mut file);
+            state.size += SharedState::recover_file(&mut state.table, file_index, &mut file)?;
             state.files.insert(file_index, FileEntry { file, unused_count: 0 });
         }
 
@@ -345,7 +343,7 @@ impl SharedState {
         Ok(state)
     }
 
-    fn recover_file(table: &mut HashMap<String, TableEntry>, file_index: FileIndex, file: &mut File) -> usize {
+    fn recover_file(table: &mut HashMap<String, TableEntry>, file_index: FileIndex, file: &mut File) -> Result<usize, KopperError> {
 
         enum CurrentlyReading { Key, Value }
         let mut currently_reading = CurrentlyReading::Key;
@@ -361,13 +359,11 @@ impl SharedState {
         let mut buffer = [0; 2048];
 
         loop {
-            let bytes_in_buffer = match file.read(&mut buffer) {
-                Ok(bytes_read) if bytes_read == 0 => break,
-                Ok(bytes_read) => bytes_read,
-                Err(e) => {
-                    println!("Error: {}", e); break
-                }
+            let bytes_in_buffer = match file.read(&mut buffer)? {
+                0 => break,
+                bytes_read => bytes_read,
             };
+            
             key_offset = 0;
             
             for byte_index in 0..bytes_in_buffer {
@@ -406,7 +402,7 @@ impl SharedState {
             // Being here, we're probably left with some incomplete key or value that continues in the next chunk
             match currently_reading {
                 CurrentlyReading::Key => {
-                    key.push_str(std::str::from_utf8(&buffer[key_offset..bytes_in_buffer]).unwrap());
+                    key.push_str(std::str::from_utf8(&buffer[key_offset..bytes_in_buffer])?);
                 },
                 _ => ()
             }
@@ -414,7 +410,7 @@ impl SharedState {
             buffer_file_offset += bytes_in_buffer;
         }
 
-        buffer_file_offset
+        Ok(buffer_file_offset)
     }
 }
 
