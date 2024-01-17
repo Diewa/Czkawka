@@ -1,3 +1,4 @@
+#[test]
 fn how_to_traits() {
     #[derive(Debug)]
     struct Typo {
@@ -27,7 +28,10 @@ fn how_to_traits() {
     impl Traito for Typo {}
 }
 
+#[test]
 fn std_errors() {
+    
+    use std::error::Error;
 
     #[derive(Debug)]
     struct GuwnoError {}
@@ -46,10 +50,10 @@ fn std_errors() {
 
     // io::Result<String> to alias Result<String, io::Error>
 
-    fn fallo() -> Result<u32, DuzyError> {
+    fn fallo() -> Result<u32, Box<dyn Error>> {
         
         // io::std::Error
-        let str = fs::read_to_string("plik_ktory_nie_istnieje")?;
+        let str = std::fs::read_to_string("plik_ktory_nie_istnieje")?;
 
         // std::num::ParseIntError
         let num: u32 = str.parse::<u32>()?;
@@ -73,6 +77,7 @@ fn std_errors() {
     
 }
 
+#[test]
 fn thiserror_errors() {
     
     use thiserror::Error;
@@ -96,7 +101,7 @@ fn thiserror_errors() {
     fn fallo() -> Result<u32, DuzyError> {
 
         // io::std::Error
-        let str = fs::read_to_string("plik_ktory_nie_istnieje")?;
+        let str = std::fs::read_to_string("plik_ktory_nie_istnieje")?;
 
         // std::num::ParseIntError
         let num: u32 = str.parse::<u32>()?;
@@ -119,3 +124,5 @@ fn thiserror_errors() {
         }
     }
 }
+
+fn main() {}
