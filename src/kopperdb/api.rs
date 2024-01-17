@@ -21,8 +21,8 @@ pub struct WriteResponse {
 }
 
 pub trait Database {
-    fn read(&self, key: &str) -> std::io::Result<Option<String>>;
-    fn write(&self, key: &str, value: &str) -> std::io::Result<usize>;
+    fn read(&self, key: &str) -> Result<String, KopperError>;
+    fn write(&self, key: &str, value: &str) -> Result<usize, KopperError>;
 }
 
 pub fn read(key: &str, db: &impl Database, stats: &State<Stats>) -> Json<ReadResponse> {
@@ -31,30 +31,28 @@ pub fn read(key: &str, db: &impl Database, stats: &State<Stats>) -> Json<ReadRes
     let response = match db.read(key) {
 
         // Database operation successful
-        Ok(value_option) => {
-            match value_option {
-
-                // Value exists
-                Some(value) => {
-                    ReadResponse { 
-                        value, 
-                        error: String::from("OK") 
-                    }
-                }
-
-                None => {
-                    ReadResponse { 
-                        value: "".to_string(),
-                        error: format!("{key} does not exist!")
-                    }
-                }
+        Ok(value) => {
+            // Value exists
+            ReadResponse { 
+                value, 
+                error: String::from("OK") 
             }
         },
 
-        Err(err) => {
+        Err(KopperError::KeyDoesNotExist(_)) => {
+    
             ReadResponse { 
                 value: "".to_string(),
-                error: err.to_string()
+                error: format!("{key} does not exist!")
+            }
+        },
+
+        Err(other) => {
+            println!("{other}");
+
+            ReadResponse { 
+                value: format!(""),
+                error: format!("Internal Error")
             }
         }
     };
@@ -128,21 +126,21 @@ pub async fn get_stats(read_or_write: String, stats: &State<Stats>) -> Option<Na
 
 // TODO: Move the Database trait to another file and implement it in kopper/brass respectively
 impl Database for Kopper {
-    fn read(&self, key: &str) -> std::io::Result<Option<String>> {
+    fn read(&self, key: &str) -> Result<String, KopperError> {
         self.read(key)
     }
 
-    fn write(&self, key: &str, value: &str) -> std::io::Result<usize> {
+    fn write(&self, key: &str, value: &str) -> Result<usize, KopperError> {
         self.write(key, value)
     }
 }
 
 impl Database for Brass {
-    fn read(&self, key: &str) -> std::io::Result<Option<String>> {
+    fn read(&self, key: &str) -> Result<String, KopperError> {
         self.read(key)
     }
 
-    fn write(&self, key: &str, value: &str) -> std::io::Result<usize> {
+    fn write(&self, key: &str, value: &str) -> Result<usize, KopperError> {
         self.write(key, value)
     }
 }
@@ -153,7 +151,7 @@ pub fn create_kopper(path: &str, segment_size: usize) -> Result<Kopper, KopperEr
 }
 
 /// Creates a [`Brass`] instance that can be mounted as a state by Rocket 
-pub fn create_brass(path: &str, segment_size: usize) -> Result<Brass, BrassError> {
+pub fn create_brass(path: &str, segment_size: usize) -> Result<Brass, KopperError> {
     Brass::create(path, segment_size)
 }
 

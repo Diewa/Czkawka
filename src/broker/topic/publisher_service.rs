@@ -18,6 +18,10 @@ pub struct PublisherService {
     db: Kopper
 }
 
+pub enum PublisherServiceError {
+    Inernal
+}
+
 impl PublisherService {
     pub fn new(topic_service: Arc<TopicService>, db: Kopper) -> Self {
         let publisher = PublisherService {
@@ -26,13 +30,16 @@ impl PublisherService {
         publisher
     }
 
-    pub fn publish_message(&self, topic_name: &str, message: MessagePayload) -> Result<(), std::io::Error> {
-        if self.topic_service.topic_exists(topic_name)? {
-            todo!()
+    pub fn publish_message(&self, topic_name: &str, message: MessagePayload) -> Result<(), PublisherServiceError> {
+        match self.topic_service.topic_exists(topic_name) {
+            Ok(_) => todo!(),
+            Err(_) => todo!(),
         };
 
         let serialized_message = serde_json::to_string(&message).expect("Failed to serialize");
-        self.db.write("someMessageQueueKeyOrSomething", &serialized_message)?;
+
+        // TODO: Fix this with a publisherservice errors!!!
+        self.db.write("someMessageQueueKeyOrSomething", &serialized_message).expect("Couldn't write to Kopper!");
         todo!()
     }
 }

@@ -30,15 +30,22 @@ pub fn router(config: &rocket::Config, db_folder: &str) -> Rocket<Build> {
             api::receiver::get_offset
         ])
 
-        // ADMIN
+        // ADMIN API
+        .mount("/", routes![api::admin::web_main])
         .mount("/admin", routes![
-            api::admin::get_topic,  
+            // Htmx endpoints
             api::admin::create_topic,
-            api::admin::index
+            
+            api::admin::module_main,
+            api::admin::module_topic,
+
+            // Direct browser URL access helpers
+            api::admin::web_main, // /admin
+            api::admin::web_topic // /admin/topic/<name>
         ])
         .manage(topic_service)
         .manage(publisher_service)
         
         .manage(templater)
-        .mount("/", FileServer::from(web_path))
+        .mount("/static", FileServer::from(web_path.to_owned() + "/static"))
 }

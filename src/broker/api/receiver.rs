@@ -11,7 +11,7 @@ pub fn publish_message(
     publisher_service: &State<Arc<PublisherService>>) {
     // to do: controller responsible for message publishing 
 
-    publisher_service.publish_message(topic_name, payload.0).unwrap();
+    publisher_service.publish_message(topic_name, payload.0);
 }
 
 #[get("/offset")]

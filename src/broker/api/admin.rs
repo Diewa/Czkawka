@@ -33,7 +33,7 @@ pub fn create_topic(
     match topic_service.create_topic(topic_entry.clone()) {
         Err(error) => {
             // TODO: better display the error in html
-            return content::RawHtml(error.to_string());
+            return content::RawHtml(todo!());
         }
         Ok(_) => () // Ignore the Ok response
     }
@@ -41,13 +41,15 @@ pub fn create_topic(
     content::RawHtml(topic_entry.to_html())
 }
 
-#[get("/topic/<name>")]
-pub fn get_topic(name: &str, topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
+#[get("/module/topic/<topic_name>")]
+pub fn module_topic(topic_name: &str, topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
+
+    // TODO: Move the following to topic_serice 
 
     // Fetch all topics 
     let topics = match topic_service.get_topics() {
         Err(error) => {
-            return content::RawHtml(format!("Error fetching topics! {}", error));
+            return content::RawHtml(format!("Error fetching topics! {}", todo!()));
         },
         Ok(topics) => topics,
     };
@@ -55,13 +57,13 @@ pub fn get_topic(name: &str, topic_service: &State<Arc<TopicService>>, templater
     // Look for specific topic
     let mut topic_found = None;
     for topic in topics.iter() {
-        if name == topic.name {
+        if topic_name == topic.name {
             topic_found = Some(topic);
         }
     }
 
     if !topic_found.is_some() {
-        return content::RawHtml(format!("Topic {} doesn't exist!", name));
+        return content::RawHtml(format!("Topic {} doesn't exist!", topic_name));
     }
 
     let topic = topic_found.unwrap();
@@ -72,30 +74,50 @@ pub fn get_topic(name: &str, topic_service: &State<Arc<TopicService>>, templater
         ("subscribers", topic.subscribers.to_html())
     ]);
 
-    templater.get("topic", vars)
+    content::RawHtml(templater.get("topic", vars))
 }
 
-#[get("/")]
-pub fn index(topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
+#[get("/module/main")]
+pub fn module_main(topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
     
-    let mut html = String::new();
-
     let topics = match topic_service.get_topics() {
         Err(error) => {
-            return content::RawHtml(error.to_string());
+            return content::RawHtml(todo!());
         },
         Ok(topics) => topics,
     };
 
-    for topic_entry in topics.iter() {
-        html.push_str(&topic_entry.to_html());
-    }
+    // Construct main component
+    let topics_vars = HashMap::from([
+        ("topics", topics.0.to_html())
+    ]);
 
-    let vars = HashMap::from([
-        ("topics", html),
+    content::RawHtml(templater.get("main", topics_vars))
+}
+
+// Direct browser URL handlers
+#[get("/")]
+pub fn web_main(templater: &State<Arc<Templater>>) -> content::RawHtml<String>{
+    
+    // Construct index component
+    let index_vars = HashMap::from([
+        ("url", format!("/admin/module/main")),
+        ("browser_url", format!("/admin")),
+    ]);
+
+    content::RawHtml(templater.get("index", index_vars))
+}
+
+#[get("/topic/<topic_name>")]
+pub fn web_topic(topic_name: &str, templater: &State<Arc<Templater>>) -> content::RawHtml<String>{
+    
+    // Construct index component
+    let index_vars: HashMap<&str, String> = HashMap::from([
+        ("url", format!("/admin/module/topic/{topic_name}")),
+        ("browser_url", format!("/admin/topic/{topic_name}")),
     ]);
     
-    templater.get("main", vars)
+    content::RawHtml(templater.get("main", index_vars))
 }
 
 #[derive(FromForm)]
@@ -117,7 +139,7 @@ pub fn create_subscriber(
         endpoint: subscriber.endpoint.clone()
     };
 
-    topic_service.subscribe_topic(topic_name, subscription_entry)
+    topic_service.subscribe_topic(topic_name, subscription_entry);
     // templater.generateSth(subscriber)
     todo!()
 }
@@ -146,8 +168,9 @@ impl ToHtml for TopicEntry {
                 <td>{name}</td>
                 <td>{owner}</td>
                 <td class=\"text-center\">
-                    <button hx-get=\"/admin/topic/{name}\" 
-                            hx-target=\"#module\" 
+                    <button hx-get=\"/admin/module/topic/{name}\" 
+                            hx-target=\"#module\"
+                            hx-push-url=\"/admin/topic/{name}\"
                             class=\"btn btn-secondary\">Edit
                     </button>
                 </td>
@@ -155,7 +178,7 @@ impl ToHtml for TopicEntry {
     }
 }
 
-impl ToHtml for Subscriber {
+impl ToHtml for SubscriptionEntry {
     fn to_html(&self) -> String {
         let name = &self.name;
         let endpoint = &self.endpoint.to_string();

@@ -1,11 +1,11 @@
 use czkawka::kopper::*;
 use serde::{Serialize, Deserialize};
-use rocket::{serde::json::serde_json, form::name};
-use crate::api::admin::get_topic;
+use rocket::serde::json::serde_json;
 
 
-enum TopicServiceError {
-    TopicNotFound(String)
+pub enum TopicServiceError {
+    TopicNotFound(String),
+    Internal
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -23,7 +23,7 @@ pub struct SubscriptionEntry {
 
 // This is a tuple. Elements of tuple are accessed with indices: tuple.0
 #[derive(Serialize, Deserialize)]
-pub struct TopicList(Vec<TopicEntry>);
+pub struct TopicList(pub Vec<TopicEntry>);
 
 impl TopicList {
     // Consume the list
@@ -36,10 +36,6 @@ impl TopicList {
     fn from_json(str: String) -> Self {
         serde_json::from_str(&str)
             .expect("Can't deserialize topic list")
-    }
-
-    fn new() -> Self {
-        TopicList { 0: vec![] }
     }
 
     pub fn iter(&self) -> std::slice::Iter<TopicEntry> {
@@ -60,7 +56,7 @@ impl TopicService {
         TopicService{ db }
     }
 
-    pub fn create_topic(&self, topic: TopicEntry) -> Result<usize, std::io::Error> {
+    pub fn create_topic(&self, topic: TopicEntry) -> Result<usize, TopicServiceError> {
 
         let mut entry_list = self.fetch_topic_list()?;
 
@@ -70,15 +66,20 @@ impl TopicService {
         // Write the list back to db
         let serialized_list = TopicList::to_json(entry_list);
 
-        let db_size = self.db.write(TopicList::key(), &serialized_list)?;
+        let db_size = match self.db.write(TopicList::key(), &serialized_list) {
+            Ok(x) => x,
+
+            // TODO: Fix with new errors!
+            Err(err) => return Err(TopicServiceError::Internal),
+        };
         Ok(db_size)
     }
 
-    pub fn get_topics(&self) -> Result<TopicList, std::io::Error> {
+    pub fn get_topics(&self) -> Result<TopicList, TopicServiceError> {
         self.fetch_topic_list()
     }
 
-    pub fn topic_exists(&self, topic_name: &str) -> Result<bool, std::io::Error> {
+    pub fn topic_exists(&self, topic_name: &str) -> Result<bool, TopicServiceError> {
         let topic_list = self.fetch_topic_list()?;
 
         Ok(topic_list.0
@@ -86,7 +87,7 @@ impl TopicService {
             .any(|x| x.name == topic_name)) // Match on names only
     }
 
-    fn find_topic_in_list(&self, topic_name: &str, topic_list: &TopicList) -> Result<&TopicEntry, TopicServiceError> {
+    fn find_topic_in_list<'a>(&self, topic_name: &str, topic_list: &'a TopicList) -> Result<&'a TopicEntry, TopicServiceError> {
         // czemu tu uzywamy topic_list.0 skoro metoda iter() jest zaimplementowa w strukturze i robi dokładnie to samo?
         let option = topic_list
             .iter()
@@ -101,41 +102,34 @@ impl TopicService {
         }
     }
 
-    pub fn subscribe_topic(&self, topic_name: &str, subscription_entry: SubscriptionEntry) -> Result<(), std::io::Error> {
+    pub fn subscribe_topic(&self, topic_name: &str, subscription_entry: SubscriptionEntry) -> Result<(), TopicServiceError> {
         let mut entry_list = self.fetch_topic_list()?;
         let mut topic = self.find_topic_in_list(topic_name, &entry_list)?;
 
-        topic.subscribers.push(subscription_entry);
+        //topic.subscribers.push(subscription_entry);
 
         let serialized_list = TopicList::to_json(entry_list);
 
-        self.db.write(TopicList::key(), &serialized_list)?;
+        //self.db.write(TopicList::key(), &serialized_list)?;
         Ok(())
     }
 
 
     // todo: add cache
-    fn fetch_topic_list(&self) -> Result<TopicList, std::io::Error> {
-
-        // Perform db query
-        let db_read_result = self.db.read(TopicList::key())?;
-
-        let entry_list = match db_read_result {
-
-            // Topic table exists in db
-            Some(topic_list) => {
-
-                // Deserialize into vec of entries
-                TopicList::from_json(topic_list)
+    fn fetch_topic_list(&self) -> Result<TopicList, TopicServiceError> {
+        
+        match self.db.read(TopicList::key()) {
+            Ok(topic_list) => {
+                // Found the entry, let's deserialize it
+                Ok(TopicList::from_json(topic_list))
             },
-
-            // Topics table does not exist yet - so make an empty list
-            None => {
-                TopicList::new()
+            Err(err) => {
+                println!("Can't fetch topic list due to: {}", err);
+                
+                // TODO: Fix this with dedicated topicservice error!!!
+                Err(TopicServiceError::Internal)
             },
-        };
-
-        Ok(entry_list)
+        }
     }
 }
 
