@@ -32,8 +32,9 @@ pub fn create_topic(
 
     match topic_service.create_topic(topic_entry.clone()) {
         Err(error) => {
-            // TODO: better display the error in html
-            return content::RawHtml(todo!());
+
+            // TODO: better display the error in htmx - return 404 or something
+            return content::RawHtml(format!("Can't create the topic due to {error}"));
         }
         Ok(_) => () // Ignore the Ok response
     }
@@ -44,29 +45,12 @@ pub fn create_topic(
 #[get("/module/topic/<topic_name>")]
 pub fn module_topic(topic_name: &str, topic_service: &State<Arc<TopicService>>, templater: &State<Arc<Templater>>) -> content::RawHtml<String> {
 
-    // TODO: Move the following to topic_serice 
-
-    // Fetch all topics 
-    let topics = match topic_service.get_topics() {
-        Err(error) => {
-            return content::RawHtml(format!("Error fetching topics! {}", todo!()));
+    let topic = match topic_service.get_topic(topic_name) {
+        Ok(topic) => topic,
+        Err(err) => {
+            return content::RawHtml(format!("Can't find the topic {topic_name} due to {err}"));
         },
-        Ok(topics) => topics,
     };
-
-    // Look for specific topic
-    let mut topic_found = None;
-    for topic in topics.iter() {
-        if topic_name == topic.name {
-            topic_found = Some(topic);
-        }
-    }
-
-    if !topic_found.is_some() {
-        return content::RawHtml(format!("Topic {} doesn't exist!", topic_name));
-    }
-
-    let topic = topic_found.unwrap();
 
     let vars = HashMap::from([
         ("name", topic.name.clone()),
@@ -82,7 +66,7 @@ pub fn module_main(topic_service: &State<Arc<TopicService>>, templater: &State<A
     
     let topics = match topic_service.get_topics() {
         Err(error) => {
-            return content::RawHtml(todo!());
+            return content::RawHtml(error.to_string());
         },
         Ok(topics) => topics,
     };
@@ -131,7 +115,7 @@ pub fn create_subscriber(
     topic_name: &str,
     subscriber: Form<SubscriberDTO>,
     topic_service: &State<Arc<TopicService>>, 
-    templater: &State<Arc<Templater>>
+    // templater: &State<Arc<Templater>>
 ) {
 
     let subscription_entry = SubscriptionEntry {
@@ -139,7 +123,7 @@ pub fn create_subscriber(
         endpoint: subscriber.endpoint.clone()
     };
 
-    topic_service.subscribe_topic(topic_name, subscription_entry);
+    topic_service.subscribe_topic(topic_name, subscription_entry).unwrap();
     // templater.generateSth(subscriber)
     todo!()
 }

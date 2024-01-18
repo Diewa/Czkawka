@@ -19,7 +19,7 @@ pub struct PublisherService {
 }
 
 pub enum PublisherServiceError {
-    Inernal
+    _Inernal
 }
 
 impl PublisherService {
@@ -30,16 +30,15 @@ impl PublisherService {
         publisher
     }
 
-    pub fn publish_message(&self, topic_name: &str, message: MessagePayload) -> Result<(), PublisherServiceError> {
+    pub fn publish_message(&self, topic_name: &str, _message: MessagePayload) -> Result<(), PublisherServiceError> {
         match self.topic_service.topic_exists(topic_name) {
             Ok(_) => todo!(),
             Err(_) => todo!(),
         };
 
-        let serialized_message = serde_json::to_string(&message).expect("Failed to serialize");
+        //let serialized_message = serde_json::to_string(&message).expect("Failed to serialize");
 
         // TODO: Fix this with a publisherservice errors!!!
-        self.db.write("someMessageQueueKeyOrSomething", &serialized_message).expect("Couldn't write to Kopper!");
-        todo!()
+        //self.db.write("someMessageQueueKeyOrSomething", &serialized_message).expect("Couldn't write to Kopper!");
     }
 }

@@ -2,10 +2,21 @@ use czkawka::kopper::*;
 use serde::{Serialize, Deserialize};
 use rocket::serde::json::serde_json;
 
+use thiserror::Error;
 
+#[derive(Debug, Error)]
 pub enum TopicServiceError {
+    #[error("Topic {0} doesn't exist")]
     TopicNotFound(String),
-    Internal
+
+    #[error(transparent)]
+    Serde(#[from] serde_json::error::Error),
+
+    #[error("Internal database error, check logs")]
+    DatabaseError,
+    // Note: There is no conversion from KopperError to DatabaseError on purpose. 
+    // We want the topic service to handle database errors internally (by logging them)
+    // and only bubble up info that the error happened - no details.
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -26,20 +37,12 @@ pub struct SubscriptionEntry {
 pub struct TopicList(pub Vec<TopicEntry>);
 
 impl TopicList {
-    // Consume the list
-    fn to_json(self) -> String {
+    fn to_json(self) -> serde_json::Result<String> {
         serde_json::to_string(&self.0)
-            .expect("Failed to serialize topic list")
     }
 
-    // Create new list
-    fn from_json(str: String) -> Self {
+    fn from_json(str: &str) -> serde_json::Result<Self> {
         serde_json::from_str(&str)
-            .expect("Can't deserialize topic list")
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<TopicEntry> {
-        self.0.iter()
     }
 
     fn key() -> &'static str {
@@ -56,29 +59,6 @@ impl TopicService {
         TopicService{ db }
     }
 
-    pub fn create_topic(&self, topic: TopicEntry) -> Result<usize, TopicServiceError> {
-
-        let mut entry_list = self.fetch_topic_list()?;
-
-        // Append our new topic to the list
-        entry_list.0.push(topic);
-
-        // Write the list back to db
-        let serialized_list = TopicList::to_json(entry_list);
-
-        let db_size = match self.db.write(TopicList::key(), &serialized_list) {
-            Ok(x) => x,
-
-            // TODO: Fix with new errors!
-            Err(err) => return Err(TopicServiceError::Internal),
-        };
-        Ok(db_size)
-    }
-
-    pub fn get_topics(&self) -> Result<TopicList, TopicServiceError> {
-        self.fetch_topic_list()
-    }
-
     pub fn topic_exists(&self, topic_name: &str) -> Result<bool, TopicServiceError> {
         let topic_list = self.fetch_topic_list()?;
 
@@ -87,49 +67,79 @@ impl TopicService {
             .any(|x| x.name == topic_name)) // Match on names only
     }
 
-    fn find_topic_in_list<'a>(&self, topic_name: &str, topic_list: &'a TopicList) -> Result<&'a TopicEntry, TopicServiceError> {
-        // czemu tu uzywamy topic_list.0 skoro metoda iter() jest zaimplementowa w strukturze i robi dokładnie to samo?
-        let option = topic_list
-            .iter()
-            .find(|x| x.name == topic_name);
-
-        match option {
-            Some(entry) => {
-                return Ok(entry)
-            }
-
-            None => Err(TopicServiceError::TopicNotFound(format!("Topic with name {} not found", topic_name)))
-        }
-    }
-
     pub fn subscribe_topic(&self, topic_name: &str, subscription_entry: SubscriptionEntry) -> Result<(), TopicServiceError> {
-        let mut entry_list = self.fetch_topic_list()?;
-        let mut topic = self.find_topic_in_list(topic_name, &entry_list)?;
+        
+        let mut topic_list =  self.fetch_topic_list()?;
+        let topic = self.find_topic_in_list(topic_name, &mut topic_list)?;
 
-        //topic.subscribers.push(subscription_entry);
+        topic.subscribers.push(subscription_entry);
 
-        let serialized_list = TopicList::to_json(entry_list);
-
-        //self.db.write(TopicList::key(), &serialized_list)?;
+        self.save_topic_list(topic_list)?;
         Ok(())
     }
 
+    pub fn get_topic(&self, topic_name: &str) -> Result<TopicEntry, TopicServiceError> {
+        
+        let mut topic_list =  self.fetch_topic_list()?;
+        Ok(self.find_topic_in_list(topic_name, &mut topic_list)?.clone())
+    }
 
-    // todo: add cache
+    pub fn get_topics(&self) -> Result<TopicList, TopicServiceError> {
+        self.fetch_topic_list()
+    }
+
+    pub fn create_topic(&self, topic: TopicEntry) -> Result<(), TopicServiceError> {
+
+        // Fetch from DB
+        let mut topic_list = self.fetch_topic_list()?;
+
+        // Append our new topic to the list
+        topic_list.0.push(topic);
+
+        // Save to DB
+        self.save_topic_list(topic_list)?;
+        Ok(())
+    }
+
+    fn find_topic_in_list<'a>(&self, topic_name: &str, topic_list: &'a mut TopicList) -> Result<&'a mut TopicEntry, TopicServiceError> {
+        let topic_entry_option = topic_list.0
+            .iter_mut()
+            .find(|x| x.name == topic_name);
+
+        let topic_entry = topic_entry_option
+            .ok_or_else(|| TopicServiceError::TopicNotFound(topic_name.to_owned()))?;
+
+        Ok(topic_entry)
+    }
+
     fn fetch_topic_list(&self) -> Result<TopicList, TopicServiceError> {
         
-        match self.db.read(TopicList::key()) {
-            Ok(topic_list) => {
-                // Found the entry, let's deserialize it
-                Ok(TopicList::from_json(topic_list))
-            },
+        let serialized_list = match self.db.read(TopicList::key()) {
+            Ok(topic_list) => topic_list,
+
             Err(err) => {
-                println!("Can't fetch topic list due to: {}", err);
+                // Handle error by logging it and return 'redacted' error
+                println!("Kopper error when reading {err}");
                 
-                // TODO: Fix this with dedicated topicservice error!!!
-                Err(TopicServiceError::Internal)
+                return Err(TopicServiceError::DatabaseError);
             },
+        };
+
+        Ok(TopicList::from_json(&serialized_list)?)
+    }
+
+    fn save_topic_list(&self, topic_list: TopicList) -> Result<(), TopicServiceError> {
+        
+        let serialized_list = TopicList::to_json(topic_list)?;
+
+        if let Err(err) = self.db.write(TopicList::key(), &serialized_list) {
+            // Handle error by logging it and return 'redacted' error
+            println!("Kopper error when writing {err}");
+
+            return Err(TopicServiceError::DatabaseError);
         }
+
+        Ok(())
     }
 }
 
