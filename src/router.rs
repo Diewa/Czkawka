@@ -14,7 +14,7 @@ const SEGMENT_SIZE: usize = 4000;
 
 pub fn router(config: &rocket::Config, db_folder: &str) -> Rocket<Build> {
     
-    let web_path = relative!("src/broker/web");
+    let web_path = relative!("src/web");
 
     // DI management
     let kopper = Kopper::create(db_folder, SEGMENT_SIZE).expect("Can't create Kopper!");
