@@ -128,8 +128,7 @@ fn thiserror_errors() {
 
 
 fn general_and_specific_error() {
-
-    use czkawka::from_error;
+    use kopperdb::from_error;
 
     #[derive(Debug, thiserror::Error)]
     pub enum DuzyError {

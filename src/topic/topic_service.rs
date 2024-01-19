@@ -1,4 +1,4 @@
-use czkawka::kopper::*;
+use kopperdb::kopper::*;
 use serde::{Serialize, Deserialize};
 use rocket::serde::json::serde_json;
 

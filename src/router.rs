@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use rocket::{Rocket, Build};
 use rocket::fs::{FileServer, relative};
+use kopperdb::kopper::Kopper;
 
 use crate::api;
 use crate::topic::{
     publisher_service::PublisherService,
     topic_service::TopicService
 };
-use czkawka::kopper::Kopper;
 
 const SEGMENT_SIZE: usize = 4000; 
 

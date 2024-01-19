@@ -1,8 +1,7 @@
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
-use rocket::serde::json::serde_json;
 
-use czkawka::kopper::Kopper;
+use kopperdb::kopper::*;
 use crate::topic::topic_service::TopicService;
 
 #[derive(Serialize, Deserialize)]
