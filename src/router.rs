@@ -35,6 +35,7 @@ pub fn router(config: &rocket::Config, db_folder: &str) -> Rocket<Build> {
         .mount("/admin", routes![
             // Htmx endpoints
             api::admin::create_topic,
+            api::admin::create_subscriber,
             
             api::admin::module_main,
             api::admin::module_topic,
