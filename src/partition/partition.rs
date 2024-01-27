@@ -1,20 +1,22 @@
 use std::{collections::BTreeMap, fs::File, io::{self, Write, Seek, Read}, time::SystemTime, rc::Rc, cell::RefCell};
 
+use bincode::error::{EncodeError, DecodeError};
 use kopperdb::from_error;
 
 use crate::partition::entry_collection::*;
 
 type Offset = u64;
 
-struct IndexEntry {
-    file: Rc<RefCell<File>>,
-    address: usize,
+
+#[derive(thiserror::Error, Debug)]
+pub enum PartitionError {
+    
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error)
 }
 
-struct CurrentFile {
-    file: Rc<RefCell<File>>,
-    offset: Offset
-}
+// Awesome macro to be able to turn errors into PartitionError::Internal using "?"
+from_error!(PartitionError::Internal, std::io::Error, std::time::SystemTimeError, EncodeError, DecodeError);
 
 ///
 /// Partition represents the in-memory index of an on-disk log
@@ -25,22 +27,14 @@ pub struct Partition {
     current_file: CurrentFile
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum PartitionError {
-    
-    #[error(transparent)]
-    Internal(#[from] anyhow::Error)
+struct IndexEntry {
+    file: Rc<RefCell<File>>,
+    address: usize,
 }
 
-// Awesome macro to be able to turn errors into PartitionError::Internal using "?"
-from_error!(PartitionError::Internal, std::io::Error, std::time::SystemTimeError, bincode::Error);
-
-// Derive from serde to be able to use bincode and easily turn struct into bytes and vice-versa
-#[derive(Debug, serde::Serialize)]
-struct DiskEntry<'a> {
-    offset: u64,
-    timestamp: u64,
-    value: &'a str
+struct CurrentFile {
+    file: Rc<RefCell<File>>,
+    offset: Offset
 }
 
 impl Partition {
@@ -93,17 +87,11 @@ impl Partition {
                 .duration_since(SystemTime::UNIX_EPOCH)?
                 .as_secs();
 
-        let header = DiskEntry {
-            offset,
-            timestamp,
-            value
-        };
-
-        let bytes = bincode::serialize(&header)?;
+        let serialized_partition_entry = PartitionEntry::serialize(offset, timestamp, value)?;
 
         // Get to end of file, and write our bytes there
         self.current_file.file.borrow_mut().seek(io::SeekFrom::End(0))?;
-        self.current_file.file.borrow_mut().write_all(&bytes)?;
+        self.current_file.file.borrow_mut().write_all(&serialized_partition_entry)?;
         self.current_file.offset += 1;
         Ok(offset)
     }
