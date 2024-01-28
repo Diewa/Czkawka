@@ -1,16 +1,22 @@
-use std::{collections::BTreeMap, fs::File, io::{self, Write, Seek, Read}, time::SystemTime, rc::Rc, cell::RefCell};
+use std::{cell::RefCell, collections::BTreeMap, fs::File, io::{self, Write, Seek, Read}, rc::Rc, time::SystemTime};
 
 use bincode::error::{EncodeError, DecodeError};
 use kopperdb::from_error;
 
 use crate::partition::entry_collection::*;
 
-type Offset = u64;
+pub type Offset = u64;
 
+const SEG_LENGTH: usize = 4096;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PartitionError {
-    
+    #[error("There are no messages in the partition")]
+    NoFirstOffset,
+
+    #[error("Offset {0} does not exist")]
+    BadOffset(Offset),
+
     #[error(transparent)]
     Internal(#[from] anyhow::Error)
 }
@@ -22,56 +28,27 @@ from_error!(PartitionError::Internal, std::io::Error, std::time::SystemTimeError
 /// Partition represents the in-memory index of an on-disk log
 ///
 pub struct Partition {
-    path: String,
     index: BTreeMap<Offset, IndexEntry>,
-    current_file: CurrentFile
+    next_offset: Offset
 }
 
 struct IndexEntry {
-    file: Rc<RefCell<File>>,
+    file: File,
     address: usize,
-}
-
-struct CurrentFile {
-    file: Rc<RefCell<File>>,
-    offset: Offset
+    size: usize,
 }
 
 impl Partition {
     pub fn new(path: &str) -> Result<Self, PartitionError> {
         // There are two possible states when creating Partition:
-        // 1. The log is already on disk
-        // 2. We need to create a fresh log
-        
-        // Let's check that
+
+        // 1. The log is already on disk        
         if Partition::partition_exists_at_path(path)? {
             return Partition::recover(path);
         }
         
-        // Create a log from scratch
-        // Setup the first file
-        let first_file = Rc::new(RefCell::new(
-            std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .open("0")?));
-
-        // Create the first index
-        let index = IndexEntry {
-            file: first_file.clone(),
-            address: 0,
-        };
-
-        // Put it into the tree
-        let mut btree = BTreeMap::new();
-        btree.insert(0, index);
-
-        Ok(Partition {
-            path: path.to_owned(),
-            index: btree,
-            current_file: CurrentFile { file: first_file, offset: 0}
-        })
+        // 2. We need to create a fresh log
+        Partition::create_new(path)
     }
 
     ///
@@ -79,20 +56,24 @@ impl Partition {
     ///
     pub fn produce(&mut self, value: &str) -> Result<Offset, PartitionError> {
         
-        // Create metadata for the entry
-        let offset = self.current_file.offset;
+        // Create metadata for the entry. We can unwrap here because at least one entry always exists
+        let mut entry = self.index.last_entry().unwrap();
 
         let timestamp = 
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)?
                 .as_secs();
 
+        let offset = self.next_offset;
+
         let serialized_partition_entry = PartitionEntry::serialize(offset, timestamp, value)?;
 
         // Get to end of file, and write our bytes there
-        self.current_file.file.borrow_mut().seek(io::SeekFrom::End(0))?;
-        self.current_file.file.borrow_mut().write_all(&serialized_partition_entry)?;
-        self.current_file.offset += 1;
+        entry.get_mut().file.seek(io::SeekFrom::End(0))?;
+        entry.get_mut().file.write_all(&serialized_partition_entry)?;
+
+        entry.get_mut().size += serialized_partition_entry.len();
+        self.next_offset = offset + 1;
         Ok(offset)
     }
 
@@ -101,35 +82,39 @@ impl Partition {
     /// is the difference between given offset and next in the history tree
     ///
     pub fn consume(&self, offset: Offset) -> Result<EntryCollection, PartitionError> {
-        use std::ops::Bound::{Included, Excluded, Unbounded};
 
-        // Find the address of offset closest but smaller than requested
-        let index_entry_before = 
-            self.index.range((Unbounded, Included(offset))).next_back().unwrap();
+        if offset >= self.next_offset {
+            return Err(PartitionError::BadOffset(offset));
+        }
 
-        // Find the address of offset closest but bigger than requested
-        let index_entry_after = 
-            self.index.range((Excluded(offset), Unbounded)).next().unwrap();
+        // Find the address of offset *equal or smaller* than requested
+        let index_entry = 
+            self.index
+                .range(..=offset)
+                .next_back()
+                .ok_or_else(|| PartitionError::BadOffset(offset))?.1;
 
         // Prepare info about segment of the file we're trying to read
-        let segment_start_address = index_entry_before.1.address;
-        let segment_length = index_entry_after.1.address - index_entry_before.1.address;
-        let file = index_entry_before.1.file.clone();
-
-        let mut buffer = vec![0u8; segment_length];
+        let mut file = index_entry.file.try_clone()?;
+        let mut buffer = vec![0u8; index_entry.size];
 
         // Read the segment into memory
-        file.borrow_mut().seek(io::SeekFrom::Start(segment_start_address as u64))?;
-        file.borrow_mut().read_exact(&mut buffer)?;
+        file.seek(io::SeekFrom::Start(index_entry.address as u64))?;
+        file.read_exact(&mut buffer)?;
         
         Ok(EntryCollection::new(buffer))
     }
 
     ///
-    /// eturns the offset of the earliest available message
+    /// Returns the offset of the earliest available message
     ///
     pub fn first_offset(&self) -> Result<Offset, PartitionError> {
-        todo!()
+        if self.next_offset == 0 {
+            return Err(PartitionError::NoFirstOffset);
+        }
+
+        // It's ok to unwrap because there's always an item in index
+        Ok(self.index.first_key_value().unwrap().0.clone())
     }
 
     // TODO: pub fn set_retention_period(time) {}
@@ -137,23 +122,94 @@ impl Partition {
     fn partition_exists_at_path(path: &str) -> Result<bool, PartitionError> {
         
         // Does the folder exist?
-        match std::fs::create_dir_all(path) {
-            // Successfully created a folder, so it didn't exist before
-            Ok(_) => return Ok(false),
-
-            Err(e) => {
-                // If any other error than AlreadyExists occured, return error
-                if e.kind() != io::ErrorKind::AlreadyExists {
-                    return Err(e.into());
-                }
-                
-                // Folder already exists
-                return Ok(true);
-            }
+        if std::path::Path::new(path).exists() {
+            return Ok(true);
         }
+
+        std::fs::create_dir_all(path)?;
+        Ok(false)
+    }
+
+    fn create_new(path: &str) -> Result<Self, PartitionError> {
+        // Let's check that
+        let first_file_path = format!("{}/0", path);
+
+        // Create a log from scratch
+        // Setup the first file
+        let first_file = 
+            std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(&first_file_path)?;
+
+        // Create the first index
+        let index = IndexEntry {
+            file: first_file.try_clone()?,
+            address: 0,
+            size: 0
+        };
+
+        // Put it into the tree
+        let mut btree = BTreeMap::new();
+        btree.insert(0, index);
+
+        Ok(Partition {
+            index: btree,
+            next_offset: 0
+        })
     }
 
     fn recover(path: &str) -> Result<Self, PartitionError> {
-        todo!()
+
+        let mut index = BTreeMap::new();
+        let mut highest_offset = 0;
+
+        for dir_entry in std::fs::read_dir(path)? {
+
+            let path = dir_entry?.path();
+
+            let mut file = 
+                std::fs::OpenOptions::new()
+                    .read(true)
+                    .append(true)
+                    .create(true)
+                    .open(path)?;
+
+            let mut buf = vec![];
+            file.read_to_end(&mut buf)?;
+
+            let collection = EntryCollection::new(buf);
+
+            let mut last_seg_cutoff = 0;
+            while let Some(entry) = collection.next()? {
+
+                let length_since_last_cutoff = collection.size_read() - last_seg_cutoff;
+                let is_first_entry_of_file = last_seg_cutoff == 0;
+                let is_longer_than_seg_length = length_since_last_cutoff > SEG_LENGTH;
+
+                if !(is_first_entry_of_file || is_longer_than_seg_length) {
+                    continue;
+                }
+                
+                // Cut of a new segment, i.e. create a new index entry
+                index.insert(entry.offset, IndexEntry {
+                    file: file.try_clone()?,
+                    address: last_seg_cutoff,
+                    size: length_since_last_cutoff,
+                });
+
+                last_seg_cutoff = collection.size_read();
+
+                if entry.offset > highest_offset {
+                    highest_offset = entry.offset;
+                }
+            }
+        }
+
+        Ok(Partition {
+            index,
+            next_offset: highest_offset + 1,
+        })
     }
 }

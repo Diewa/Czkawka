@@ -1,13 +1,15 @@
 
+use std::cell::Cell;
+
 use bincode::config::Configuration;
 
 use super::partition::PartitionError;
 
 #[derive(Debug, bincode::BorrowDecode, bincode::Encode)]
 pub struct PartitionEntry<'a> {
-    offset: u64,
-    timestamp: u64,
-    value: &'a str
+    pub offset: u64,
+    pub timestamp: u64,
+    pub value: &'a str
 }
 
 impl<'a> PartitionEntry<'a> {
@@ -19,30 +21,35 @@ impl<'a> PartitionEntry<'a> {
     }
 } 
 
+#[derive(Debug)]
 pub struct EntryCollection {
     data: Vec<u8>,
-    address: usize
+    address: Cell<usize>
 }
 
 impl EntryCollection {
     pub fn new(data: Vec<u8>) -> Self {
         EntryCollection {
-            data, address: 0
+            data, address: Cell::new(0)
         }
     }
 
-    pub fn next(&mut self) -> Result<Option<PartitionEntry>, PartitionError> {
-        if self.address == self.data.len() {
+    pub fn next(&self) -> Result<Option<PartitionEntry>, PartitionError> {
+        if self.address.get() == self.data.len() {
             return Ok(None);
         }
 
         let (entry, size) = 
             bincode::borrow_decode_from_slice::<PartitionEntry, Configuration>(
-                &self.data[self.address..], 
+                &self.data[self.address.get()..], 
                 bincode::config::standard())?;
 
-        self.address += size;
+        self.address.set(self.address.get() + size);
         Ok(Some(entry))
+    }
+
+    pub fn size_read(&self) -> usize {
+        self.address.get()
     }
 }
 
@@ -59,7 +66,7 @@ fn test_entry_collection() {
     vec.append(&mut bincode::encode_to_vec(&p2, bincode::config::standard()).unwrap());
 
     // 3. Make it into an EntryCollection
-    let mut ec = EntryCollection::new(vec);
+    let ec = EntryCollection::new(vec);
     
     // 4. Profit
     let new_p1 = ec.next().unwrap().unwrap();
