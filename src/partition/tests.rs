@@ -104,3 +104,52 @@ fn recover_empty() -> Result<(), PartitionError> {
     assert_eq!(p.consume(o)?.next()?.unwrap().value, "ASD");
     Ok(())
 }
+
+#[test]
+fn requested_offset_is_first_after_consuming() -> Result<(), PartitionError> {
+    let mut p = Partition::new(&new_path())?;
+
+    p.produce("A")?;
+    p.produce("B")?;
+    let offset = p.produce("C")?;
+
+    assert_eq!(p.consume(offset)?.next()?.unwrap().value, "C");
+    Ok(())
+}
+
+#[test]
+fn multiple_segments() -> Result<(), PartitionError> {
+    let mut p = Partition::new(&new_path())?;
+
+    // Currently SEG_SIZE is 4096. Add few entries to trigger second segment creation
+    p.produce(std::str::from_utf8(&vec![b'A'; 1200]).unwrap())?;
+    p.produce(std::str::from_utf8(&vec![b'A'; 1200]).unwrap())?;
+    p.produce(std::str::from_utf8(&vec![b'A'; 1200]).unwrap())?;
+    let offset: u64 = p.produce(std::str::from_utf8(&vec![b'A'; 1200]).unwrap())?; // This one should be in next seg
+
+    // Consume the last one
+    let collection = p.consume(offset)?;
+    collection.next()?;
+
+    // Since last entry should be in the new segment, the amount of bytes required to load from disk 
+    // and parse should be small, around the size of last entry's value. 
+    assert!(collection.size_read() < 1300);
+    Ok(())
+}
+
+#[test]
+fn recover_multiple_segments() -> Result<(), PartitionError> {
+    let path = new_path();
+    let mut p = Partition::new(&path)?;
+
+    // Currently SEG_SIZE is 4096. Add few entries to trigger second segment creation
+    p.produce(std::str::from_utf8(&vec![b'A'; 1200]).unwrap())?;
+    p.produce(std::str::from_utf8(&vec![b'A'; 1200]).unwrap())?;
+    p.produce(std::str::from_utf8(&vec![b'A'; 1200]).unwrap())?;
+    let offset: u64 = p.produce(std::str::from_utf8(&vec![b'B'; 1200]).unwrap())?; // This one should be in next seg
+
+    let p = Partition::new(&path)?;
+    assert_eq!(p.consume(offset)?.next()?.unwrap().value.chars().nth(0), Some('B'));
+    Ok(())
+}
+

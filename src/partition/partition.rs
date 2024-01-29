@@ -1,12 +1,10 @@
-use std::{cell::RefCell, collections::BTreeMap, fs::File, io::{self, Write, Seek, Read}, rc::Rc, time::SystemTime};
+use std::{collections::BTreeMap, fs::File, io::{self, Write, Seek, Read}, time::SystemTime};
 
-use bincode::error::{EncodeError, DecodeError};
 use kopperdb::from_error;
 
 use crate::partition::entry_collection::*;
 
 pub type Offset = u64;
-
 const SEG_LENGTH: usize = 4096;
 
 #[derive(thiserror::Error, Debug)]
@@ -22,7 +20,7 @@ pub enum PartitionError {
 }
 
 // Awesome macro to be able to turn errors into PartitionError::Internal using "?"
-from_error!(PartitionError::Internal, std::io::Error, std::time::SystemTimeError, EncodeError, DecodeError);
+from_error!(PartitionError::Internal, std::io::Error, std::time::SystemTimeError);
 
 ///
 /// Partition represents the in-memory index of an on-disk log
@@ -40,15 +38,20 @@ struct IndexEntry {
 
 impl Partition {
     pub fn new(path: &str) -> Result<Self, PartitionError> {
-        // There are two possible states when creating Partition:
-
-        // 1. The log is already on disk        
-        if Partition::partition_exists_at_path(path)? {
-            return Partition::recover(path);
-        }
         
-        // 2. We need to create a fresh log
-        Partition::create_new(path)
+        // There are two possible states when creating Partition:
+        match Partition::recover(path)? {
+            Some(partition) => {
+                
+                // 1. The log is already on disk 
+                Ok(partition)
+            }
+            None => {
+
+                // 2. The log is not on the disk, or there's only an empty file
+                Partition::create_new(path)
+            }
+        }
     }
 
     ///
@@ -56,23 +59,34 @@ impl Partition {
     ///
     pub fn produce(&mut self, value: &str) -> Result<Offset, PartitionError> {
         
-        // Create metadata for the entry. We can unwrap here because at least one entry always exists
-        let mut entry = self.index.last_entry().unwrap();
-
         let timestamp = 
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)?
                 .as_secs();
 
         let offset = self.next_offset;
+        let new_partition_entry = PartitionEntry::serialize(offset, timestamp, value)?;
 
-        let serialized_partition_entry = PartitionEntry::serialize(offset, timestamp, value)?;
+        // Create metadata for the entry. We can unwrap here because at least one entry always exists
+        let mut last_index_entry = self.index.last_entry().unwrap();
+
+        // Create new segment if needed
+        if last_index_entry.get_mut().size + new_partition_entry.len() > SEG_LENGTH {
+            let file = last_index_entry.get_mut().file.try_clone()?;
+            self.index.insert(offset, IndexEntry {
+                file,
+                address: 0,
+                size: 0
+            });
+
+            last_index_entry = self.index.last_entry().unwrap();
+        }
 
         // Get to end of file, and write our bytes there
-        entry.get_mut().file.seek(io::SeekFrom::End(0))?;
-        entry.get_mut().file.write_all(&serialized_partition_entry)?;
-
-        entry.get_mut().size += serialized_partition_entry.len();
+        last_index_entry.get_mut().file.seek(io::SeekFrom::End(0))?;
+        last_index_entry.get_mut().file.write_all(&new_partition_entry)?;
+        last_index_entry.get_mut().size += new_partition_entry.len();
+        
         self.next_offset = offset + 1;
         Ok(offset)
     }
@@ -102,7 +116,7 @@ impl Partition {
         file.seek(io::SeekFrom::Start(index_entry.address as u64))?;
         file.read_exact(&mut buffer)?;
         
-        Ok(EntryCollection::new(buffer))
+        Ok(EntryCollection::new(buffer, offset))
     }
 
     ///
@@ -131,11 +145,10 @@ impl Partition {
     }
 
     fn create_new(path: &str) -> Result<Self, PartitionError> {
-        // Let's check that
+
         let first_file_path = format!("{}/0", path);
 
-        // Create a log from scratch
-        // Setup the first file
+        // Create first file (or open if it already exists)
         let first_file = 
             std::fs::OpenOptions::new()
                 .read(true)
@@ -160,11 +173,15 @@ impl Partition {
         })
     }
 
-    fn recover(path: &str) -> Result<Self, PartitionError> {
+    fn recover(path: &str) -> Result<Option<Self>, PartitionError> {
+
+        // Create a folder if it doesn't exist
+        std::fs::create_dir_all(path)?;
 
         let mut index = BTreeMap::new();
         let mut highest_offset = 0;
 
+        // Check all files in the folder
         for dir_entry in std::fs::read_dir(path)? {
 
             let path = dir_entry?.path();
@@ -179,37 +196,58 @@ impl Partition {
             let mut buf = vec![];
             file.read_to_end(&mut buf)?;
 
-            let collection = EntryCollection::new(buf);
+            let collection = EntryCollection::new(buf, 0);
 
             let mut last_seg_cutoff = 0;
+            let mut current_seg_size = 0;
+            let mut first_offset_of_segment = None;
             while let Some(entry) = collection.next()? {
 
-                let length_since_last_cutoff = collection.size_read() - last_seg_cutoff;
-                let is_first_entry_of_file = last_seg_cutoff == 0;
-                let is_longer_than_seg_length = length_since_last_cutoff > SEG_LENGTH;
-
-                if !(is_first_entry_of_file || is_longer_than_seg_length) {
-                    continue;
+                if first_offset_of_segment.is_none() {
+                    first_offset_of_segment = Some(entry.offset);
                 }
-                
-                // Cut of a new segment, i.e. create a new index entry
-                index.insert(entry.offset, IndexEntry {
-                    file: file.try_clone()?,
-                    address: last_seg_cutoff,
-                    size: length_since_last_cutoff,
-                });
-
-                last_seg_cutoff = collection.size_read();
 
                 if entry.offset > highest_offset {
                     highest_offset = entry.offset;
                 }
+
+                if collection.size_read() - last_seg_cutoff <= SEG_LENGTH {
+                    current_seg_size = collection.size_read() - last_seg_cutoff;
+                    continue;
+                }
+                
+                // Cut of a new segment, i.e. create a new index entry
+                index.insert(first_offset_of_segment.unwrap(), IndexEntry {
+                    file: file.try_clone()?,
+                    address: last_seg_cutoff,
+                    size: current_seg_size,
+                });
+
+                last_seg_cutoff = current_seg_size;
+                current_seg_size = collection.size_read() - last_seg_cutoff;
+                first_offset_of_segment = Some(entry.offset);
+            }
+
+            if let Some(offset) = first_offset_of_segment {
+                index.insert(offset, IndexEntry {
+                    file: file.try_clone()?,
+                    address: last_seg_cutoff,
+                    size: current_seg_size,
+                });
             }
         }
 
-        Ok(Partition {
+
+        // Failing to recover partition can happen when:
+        // 1. There are no partition files
+        // 2. A file exist (Partition's been created before) but nothing's been produced yet
+        if index.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(Partition {
             index,
             next_offset: highest_offset + 1,
-        })
+        }))
     }
 }
