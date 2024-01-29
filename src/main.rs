@@ -6,6 +6,7 @@ mod api;
 mod storage;
 mod topic;
 mod router;
+mod partition;
 
 #[cfg(test)]
 mod tests;

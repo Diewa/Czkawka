@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use kopperdb::kopper::*;
 use crate::topic::topic_service::TopicService;
 
+use rocket::serde::json::serde_json;
+
 #[derive(Serialize, Deserialize)]
 pub struct MessagePayload {
     _metadata: Vec<String>,
@@ -18,7 +20,7 @@ pub struct PublisherService {
 }
 
 pub enum PublisherServiceError {
-    _Inernal
+    Internal
 }
 
 impl PublisherService {
@@ -31,13 +33,14 @@ impl PublisherService {
 
     pub fn publish_message(&self, topic_name: &str, _message: MessagePayload) -> Result<(), PublisherServiceError> {
         match self.topic_service.topic_exists(topic_name) {
-            Ok(_) => todo!(),
-            Err(_) => todo!(),
+            Ok(_) => (),
+            Err(_) => return Err(PublisherServiceError::Internal),
         };
 
-        //let serialized_message = serde_json::to_string(&message).expect("Failed to serialize");
+        let serialized_message = serde_json::to_string(&_message).expect("Failed to serialize");
 
         // TODO: Fix this with a publisherservice errors!!!
-        //self.db.write("someMessageQueueKeyOrSomething", &serialized_message).expect("Couldn't write to Kopper!");
+        self.db.write("someMessageQueueKeyOrSomething", &serialized_message).expect("Couldn't write to Kopper!");
+        Ok(())
     }
 }
