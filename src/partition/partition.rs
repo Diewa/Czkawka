@@ -25,6 +25,31 @@ from_error!(PartitionError::Internal, std::io::Error, std::time::SystemTimeError
 ///
 /// Partition represents the in-memory index of an on-disk log
 ///
+/// ```
+/// use crate::partition::{Partition, PartitionError};
+/// 
+/// // Create a partition for a given path
+/// // If a partition exists at the path already, it'll be recovered
+/// let mut p = Partition::new("partitions/p_1");
+/// 
+/// // Add an item to the partition. Returns offset associated with the item
+/// let offset1 = p.produce("list_of_best_letters: [M, I, C, H, A, L]")?;
+/// let offset2 = p.produce("list_of_best_numbers: [8, 0, 0, 8, 5]")?;
+/// 
+/// // Consumer can find which offset is first
+/// let first_offset = p.first_offset()?;
+/// 
+/// // And use it to consume some items. The items are fetched in segments,
+/// // one call to consume can return multiple saved entries. It's on the caller
+/// // to iterate through them and save the offset of the last item to execute the
+/// // next consume.
+/// let entries = p.consume(offset)?;
+/// while let Some(entry) = entries.next()? {
+///     println!("Entry! Has value: {}, offset: {}, timestamp: {}", 
+///         entry.value, entry.offset, entry.timestamp);
+/// }
+/// 
+/// ```
 pub struct Partition {
     index: BTreeMap<Offset, IndexEntry>,
     next_offset: Offset
