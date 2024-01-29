@@ -61,7 +61,13 @@ struct IndexEntry {
     size: usize,
 }
 
+// TODO: Remove when code is not dead anymore
+#[allow(dead_code)]
 impl Partition {
+    /// 
+    /// Create a partition for a given path
+    /// If a partition exists at the path already, it'll be recovered    
+    ///
     pub fn new(path: &str) -> Result<Self, PartitionError> {
         
         // There are two possible states when creating Partition:
@@ -157,17 +163,6 @@ impl Partition {
     }
 
     // TODO: pub fn set_retention_period(time) {}
-
-    fn partition_exists_at_path(path: &str) -> Result<bool, PartitionError> {
-        
-        // Does the folder exist?
-        if std::path::Path::new(path).exists() {
-            return Ok(true);
-        }
-
-        std::fs::create_dir_all(path)?;
-        Ok(false)
-    }
 
     fn create_new(path: &str) -> Result<Self, PartitionError> {
 
