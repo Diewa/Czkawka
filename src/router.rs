@@ -18,7 +18,7 @@ pub fn router(config: &rocket::Config, db_folder: &str) -> Rocket<Build> {
 
     // DI management
     let kopper = Kopper::create(db_folder, SEGMENT_SIZE).expect("Can't create Kopper!");
-    let topic_service = Arc::new(TopicService::new(kopper.clone()));
+    let topic_service = Arc::new(TopicService::new(kopper.clone()).expect("Can't create topic service"));
     let publisher_service = Arc::new(PublisherService::new(topic_service.clone(), kopper));
     let templater = Arc::new(api::templater::Templater::new(web_path));
 

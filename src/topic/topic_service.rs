@@ -55,8 +55,34 @@ pub struct TopicService {
 }
 
 impl TopicService {
-    pub fn new(db: Kopper) -> Self {
-        TopicService{ db }
+    pub fn new(db: Kopper) -> Result<Self, TopicServiceError> {
+
+        // Verify existence of the topic list entry
+        if let Err(read_error) = db.read(TopicList::key()) {
+            
+            match read_error {
+                
+                KopperError::KeyDoesNotExist(_) => {
+                    // Fresh database - let's create an empty entry
+                    
+                    let serialized_list = 
+                        TopicList(vec![])
+                            .to_json()
+                            .expect("One can always serialize empty list");
+    
+                    if let Err(write_error) = db.write(TopicList::key(), &serialized_list) {
+                        println!("Couldn't initialize a fresh topic list in db, error when writing: {write_error}");
+                        return Err(TopicServiceError::DatabaseError);
+                    }
+                },
+    
+                _ => {
+                    println!("Couldn't initialize a fresh topic list in db, error when reading: {read_error}");
+                }
+            }
+        };
+        
+        Ok(TopicService{ db })
     }
 
     pub fn topic_exists(&self, topic_name: &str) -> Result<bool, TopicServiceError> {
