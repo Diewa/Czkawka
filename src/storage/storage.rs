@@ -3,16 +3,18 @@
 use std::{collections::HashMap, fmt::Error};
 use std::collections::LinkedList;
 
-
+// deprecated 
 struct Storage {
     store: HashMap<String, MessageQueue>,
 }
 
+// deprecated
 struct Message {
     payload: String,
     metadata: String,
 }
 
+// deprecated
 struct MessageQueue {
     queue: LinkedList<Message>, // Queue doesn't exists in rust
     offset: i32
